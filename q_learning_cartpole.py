@@ -15,7 +15,7 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         return noisy_obs
 
 class QLearningAgent:
-    def __init__(self, env, bins=(6, 12, 6, 12), alpha=0.1, gamma=0.99, epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01):
+    def __init__(self, env, bins=(6, 12, 6, 12), alpha=0.1, gamma=0.9, epsilon=0.7, epsilon_decay=0.995, epsilon_min=0.01):
         self.env = env
         self.bins = bins
         self.alpha = alpha
@@ -28,7 +28,7 @@ class QLearningAgent:
         # Define the bin limits
         self.bins_limits = [
             (-2.4, 2.4),  # cart position
-            (-0.5, 0.5),  # cart velocity
+            (-1, 1),  # cart velocity
             (-math.radians(12), math.radians(12)),  # pole angle
             (-math.radians(50), math.radians(50))  # pole angular velocity
         ]
@@ -41,15 +41,15 @@ class QLearningAgent:
 
     def choose_action(self, state):
         if np.random.random() < self.epsilon:
-            return self.env.action_space.sample()
-        return np.argmax(self.q_table[state])
+            return self.env.action_space.sample() # if the random number is less than epsilon, take a random action
+        return np.argmax(self.q_table[state]) # otherwise, take the best action
 
     def update_q_table(self, current_state, action, reward, next_state, done):
-        best_future_q = np.max(self.q_table[next_state])
-        current_q = self.q_table[current_state][action]
-        self.q_table[current_state][action] = (1 - self.alpha) * current_q + self.alpha * (reward + self.gamma * best_future_q * (not done))
+        best_future_q = np.max(self.q_table[next_state]) # get the best Q-value for the next state
+        current_q = self.q_table[current_state][action] # get the current Q-value
+        self.q_table[current_state][action] = (1 - self.alpha) * current_q + self.alpha * (reward + self.gamma * best_future_q * (not done)) # update the Q-value
 
-    def train(self, episodes=10000):
+    def train(self, episodes=100000):
         for episode in range(episodes):
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
@@ -78,7 +78,6 @@ class QLearningAgent:
 
             while not done:
                 self.env.render()
-                # env = gym.make('CliffWalking-v0', render_mode='human')
                 action = np.argmax(self.q_table[current_state])
                 next_state, reward, done, _, _ = self.env.step(action)
                 next_state = self.discretize(next_state)
@@ -88,9 +87,13 @@ class QLearningAgent:
             print(f"Test Episode: {episode}, Total reward: {total_reward}")
 
 if __name__ == "__main__":
-    env = gym.make('CartPole-v1',  render_mode='human')
-    noisy_env = NoisyObservationWrapper(env, noise_std=0.1)
-    agent = QLearningAgent(noisy_env)
+    train_env = gym.make('CartPole-v1')
+    noisy_train_env = NoisyObservationWrapper(train_env, noise_std=0.1)
+    agent = QLearningAgent(noisy_train_env)
     agent.train()
+    
+    test_env = gym.make('CartPole-v1', render_mode='human')
+    noisy_test_env = NoisyObservationWrapper(test_env, noise_std=0.1)
+    agent.env = noisy_test_env
     agent.test()
-    env.close()
+    test_env.close()
