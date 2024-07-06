@@ -15,7 +15,7 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         return noisy_obs
 
 class QLearningAgent:
-    def __init__(self, env, bins=(6, 12, 6, 12), alpha=0.1, gamma=0.9, epsilon=0.7, epsilon_decay=0.995, epsilon_min=0.01):
+    def __init__(self, env, bins=(6, 12, 6, 12), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.9, epsilon_min=0.01):
         self.env = env
         self.bins = bins
         self.alpha = alpha
@@ -49,7 +49,7 @@ class QLearningAgent:
         current_q = self.q_table[current_state][action] # get the current Q-value
         self.q_table[current_state][action] = (1 - self.alpha) * current_q + self.alpha * (reward + self.gamma * best_future_q * (not done)) # update the Q-value
 
-    def train(self, episodes=100000):
+    def train(self, episodes=500000):
         for episode in range(episodes):
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
