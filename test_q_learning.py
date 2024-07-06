@@ -1,9 +1,8 @@
-# test_q_learning_cartpole.py
-
 import gymnasium as gym
 import numpy as np
 import math
 import pickle
+import argparse
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
@@ -16,7 +15,7 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         return noisy_obs
 
 class QLearningAgent:
-    def __init__(self, env, bins=(6, 12, 6, 12), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.9, epsilon_min=0.01):
+    def __init__(self, env, bins=(16, 16, 16, 16), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.9, epsilon_min=0.01):
         self.env = env
         self.bins = bins
         self.alpha = alpha
@@ -28,10 +27,10 @@ class QLearningAgent:
         
         # Define the bin limits
         self.bins_limits = [
-            (-2.4, 2.4),  # cart position
-            (-10, 10),  # cart velocity
-            (-math.radians(12), math.radians(12)),  # pole angle
-            (-math.radians(50), math.radians(50))  # pole angular velocity
+            (-4.8, 4.8),  # cart position
+            (-100, 100),  # cart velocity
+            (-math.radians(24), math.radians(24)),  # pole angle
+            (-math.radians(100), math.radians(100))  # pole angular velocity
         ]
 
     def discretize(self, obs):
@@ -45,8 +44,8 @@ class QLearningAgent:
             self.q_table = pickle.load(f)
         print(f"Model loaded from {filename}")
 
-    def test(self, episodes=1):
-        self.load_model('q_learning.pkl')
+    def test(self, model_filename, episodes=1):
+        self.load_model(model_filename)
         for episode in range(episodes):
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
@@ -64,8 +63,13 @@ class QLearningAgent:
             print(f"Test Episode: {episode}, Total reward: {total_reward}")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Test Q-Learning for CartPole with Sensor Noise')
+    parser.add_argument('--model', type=str, required=True, help='Path to the model file to load')
+    parser.add_argument('--episodes', type=int, default=1, help='Number of test episodes')
+    args = parser.parse_args()
+
     test_env = gym.make('CartPole-v1', render_mode='human')
     noisy_test_env = NoisyObservationWrapper(test_env, noise_std=0.1)
     agent = QLearningAgent(noisy_test_env)
-    agent.test()
+    agent.test(model_filename=args.model, episodes=args.episodes)
     test_env.close()
