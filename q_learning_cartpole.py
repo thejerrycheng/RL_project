@@ -3,6 +3,7 @@
 import gymnasium as gym
 import numpy as np
 import math
+import pickle
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
@@ -41,13 +42,13 @@ class QLearningAgent:
 
     def choose_action(self, state):
         if np.random.random() < self.epsilon:
-            return self.env.action_space.sample() # if the random number is less than epsilon, take a random action
-        return np.argmax(self.q_table[state]) # otherwise, take the best action
+            return self.env.action_space.sample()  # if the random number is less than epsilon, take a random action
+        return np.argmax(self.q_table[state])  # otherwise, take the best action
 
     def update_q_table(self, current_state, action, reward, next_state, done):
-        best_future_q = np.max(self.q_table[next_state]) # get the best Q-value for the next state
-        current_q = self.q_table[current_state][action] # get the current Q-value
-        self.q_table[current_state][action] = (1 - self.alpha) * current_q + self.alpha * (reward + self.gamma * best_future_q * (not done)) # update the Q-value
+        best_future_q = np.max(self.q_table[next_state])  # get the best Q-value for the next state
+        current_q = self.q_table[current_state][action]  # get the current Q-value
+        self.q_table[current_state][action] = (1 - self.alpha) * current_q + self.alpha * (reward + self.gamma * best_future_q * (not done))  # update the Q-value
 
     def train(self, episodes=500000):
         for episode in range(episodes):
@@ -69,7 +70,10 @@ class QLearningAgent:
             if episode % 100 == 0:
                 print(f"Episode: {episode}, Total reward: {total_reward}, Epsilon: {self.epsilon}")
 
+        self.save_model('q_learning.pkl')
+
     def test(self, episodes=1):
+        self.load_model('q_learning.pkl')
         for episode in range(episodes):
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
@@ -85,6 +89,16 @@ class QLearningAgent:
                 total_reward += reward
 
             print(f"Test Episode: {episode}, Total reward: {total_reward}")
+
+    def save_model(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self.q_table, f)
+        print(f"Model saved to {filename}")
+
+    def load_model(self, filename):
+        with open(filename, 'rb') as f:
+            self.q_table = pickle.load(f)
+        print(f"Model loaded from {filename}")
 
 if __name__ == "__main__":
     train_env = gym.make('CartPole-v1')
