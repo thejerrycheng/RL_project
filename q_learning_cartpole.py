@@ -29,9 +29,9 @@ class QLearningAgent:
         # Define the bin limits
         self.bins_limits = [
             (-2.4, 2.4),  # cart position
-            (-1, 1),  # cart velocity
-            (-math.radians(12), math.radians(12)),  # pole angle
-            (-math.radians(50), math.radians(50))  # pole angular velocity
+            (-10, 10),  # cart velocity
+            (-math.radians(24), math.radians(24)),  # pole angle
+            (-math.radians(100), math.radians(100))  # pole angular velocity
         ]
 
     def discretize(self, obs):
@@ -70,7 +70,7 @@ class QLearningAgent:
             if episode % 100 == 0:
                 print(f"Episode: {episode}, Total reward: {total_reward}, Epsilon: {self.epsilon}")
 
-        self.save_model('q_learning.pkl')
+        self.save_model('q_learning_2.pkl')
 
     def test(self, episodes=1):
         self.load_model('q_learning.pkl')
