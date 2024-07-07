@@ -57,14 +57,23 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
         super(NoisyObservationWrapper, self).__init__(env)
         self.noise_std = noise_std
+        self.observation_space = env.observation_space
+        
+        # Define the range for each observation component
+        self.obs_ranges = [
+            2,  # cart position noise range is -2 to 2
+            0.5,  # cart velocity noise range is -0.5 to 0.5
+            math.radians(20),  # pole angle noise range is -20 degrees to 20 degrees
+            math.radians(0.5)  # pole angular velocity noise range is -0.5 degrees/s to 0.5 degrees/s
+        ]
 
     def observation(self, obs):
-        noise = np.random.normal(0, self.noise_std, size=obs.shape)
+        noise = np.random.normal(0, self.noise_std, size=obs.shape) * self.obs_ranges
         noisy_obs = obs + noise
         return noisy_obs
 
 class QLearningAgent:
-    def __init__(self, env, bins=(16, 16, 16, 16), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.9, epsilon_min=0.01):
+    def __init__(self, env, bins=(15, 15, 15, 15), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.999, epsilon_min=0.01, model_filename=None):
         self.env = env
         self.bins = bins
         self.alpha = alpha
@@ -74,12 +83,12 @@ class QLearningAgent:
         self.epsilon_min = epsilon_min
         self.q_table = np.zeros(self.bins + (env.action_space.n,))
         
-        # Define the bin limits
+        # Define smaller bin limits compared to the terminal states
         self.bins_limits = [
-            (-4.8, 4.8),  # cart position
-            (-100, 100),  # cart velocity
-            (-math.radians(24), math.radians(24)),  # pole angle
-            (-math.radians(100), math.radians(100))  # pole angular velocity
+            (-4.8, 4.8),  # cart position (terminal state is -4.8 to 4.8)
+            (-10, 10),  # cart velocity (terminal state is -inf to inf, but we use a practical range)
+            (-math.radians(24), math.radians(24)),  # pole angle (terminal state is -math.radians(24) to math.radians(24))
+            (-math.radians(10), math.radians(10))  # pole angular velocity (terminal state is -inf to inf, but we use a practical range)
         ]
 
     def discretize(self, obs):
@@ -105,6 +114,11 @@ class QLearningAgent:
                 self.env.render()
                 action = np.argmax(self.q_table[current_state])
                 next_state, reward, done, _, _ = self.env.step(action)
+                cart_position, cart_velocity, pole_angle, pole_angular_velocity = next_state
+                if abs(cart_position) < 0.1:
+                    reward += 1  # Reward for being close to the middle
+                if abs(pole_angle) < np.radians(5):
+                    reward += 1  # Reward for being close to vertical
                 next_state = self.discretize(next_state)
                 current_state = next_state
                 total_reward += reward

@@ -16,7 +16,7 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         self.obs_ranges = [
             2,  # cart position noise range is -2 to 2
             0.5,  # cart velocity noise range is -0.5 to 0.5
-            math.radians(20),  # pole angle noise range is -20 degrees to 20 degrees
+            math.radians(2),  # pole angle noise range is -20 degrees to 20 degrees
             math.radians(0.5)  # pole angular velocity noise range is -0.5 degrees/s to 0.5 degrees/s
         ]
 
@@ -35,7 +35,7 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
     #     return noisy_obs
 
 class QLearningAgent:
-    def __init__(self, env, bins=(50, 50, 50, 50), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.999, epsilon_min=0.01, model_filename=None):
+    def __init__(self, env, bins=(15, 15, 15, 15), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.999, epsilon_min=0.01, model_filename=None):
         self.env = env
         self.bins = bins
         self.alpha = alpha
@@ -47,9 +47,9 @@ class QLearningAgent:
         
         # Define smaller bin limits compared to the terminal states
         self.bins_limits = [
-            (-2.4, 2.4),  # cart position (terminal state is -4.8 to 4.8)
+            (-4.8, 4.8),  # cart position (terminal state is -4.8 to 4.8)
             (-10, 10),  # cart velocity (terminal state is -inf to inf, but we use a practical range)
-            (-math.radians(12), math.radians(12)),  # pole angle (terminal state is -math.radians(24) to math.radians(24))
+            (-math.radians(24), math.radians(24)),  # pole angle (terminal state is -math.radians(24) to math.radians(24))
             (-math.radians(10), math.radians(10))  # pole angular velocity (terminal state is -inf to inf, but we use a practical range)
         ]
         
@@ -80,7 +80,7 @@ class QLearningAgent:
         rewards = []  # Initialize list to store rewards for each episode
 
         episode = 0
-        for epiosde in range(1000000): #5,000,000
+        for epiosde in range(100000): #5,000,000
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
             done = False
@@ -89,6 +89,13 @@ class QLearningAgent:
             while not done:
                 action = self.choose_action(current_state)
                 next_state, reward, done, _, _ = self.env.step(action)
+                # Additional rewards for specific conditions
+                cart_position, cart_velocity, pole_angle, pole_angular_velocity = next_state
+                if abs(cart_position) < 0.1:
+                    reward += 1  # Reward for being close to the middle
+                if abs(pole_angle) < np.radians(2):
+                    reward += 1  # Reward for being close to vertical
+
                 next_state = self.discretize(next_state)
                 self.update_q_table(current_state, action, reward, next_state, done)
                 current_state = next_state
@@ -128,6 +135,11 @@ class QLearningAgent:
                     self.env.render()
                 action = np.argmax(self.q_table[current_state])  # Choose the action with the highest Q-value
                 next_state, reward, done, _, _ = self.env.step(action)
+                cart_position, cart_velocity, pole_angle, pole_angular_velocity = next_state
+                if abs(cart_position) < 0.1:
+                    reward += 1  # Reward for being close to the middle
+                if abs(pole_angle) < np.radians(2):
+                    reward += 1  # Reward for being close to vertical
                 next_state = self.discretize(next_state)
                 current_state = next_state
                 total_reward += reward
