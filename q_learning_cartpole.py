@@ -47,7 +47,7 @@ class QLearningAgent:
         # Load the model if specified
         if model_filename:
             self.load_model(model_filename)
-
+ 
     def discretize(self, obs):
         # Discretize the continuous observations
         ratios = [(obs[i] - self.bins_limits[i][0]) / (self.bins_limits[i][1] - self.bins_limits[i][0]) for i in range(len(obs))]
