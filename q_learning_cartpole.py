@@ -14,10 +14,10 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         
         # Define the range for each observation component
         self.obs_ranges = [
-            2,  # cart position range is [-2.4, 2.4]
-            0.5,  # cart velocity range is approximated as [-50, 50]
-            math.radians(20),  # pole angle range is [-12 degrees, 12 degrees]
-            math.radians(0.5)  # pole angular velocity range is approximated as [-50 degrees/s, 50 degrees/s]
+            2,  # cart position noise range is -2 to 2
+            0.5,  # cart velocity noise range is -0.5 to 0.5
+            math.radians(20),  # pole angle noise range is -20 degrees to 20 degrees
+            math.radians(0.5)  # pole angular velocity noise range is -0.5 degrees/s to 0.5 degrees/s
         ]
 
     def observation(self, obs):
