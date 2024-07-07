@@ -1,86 +1,85 @@
-# Q-Learning for Noisy CartPole Environment
 
-This project implements a Q-Learning agent to solve the Cart-Pole problem with noisy observations using the Gymnasium library. The project includes a training phase where the Q-Learning agent learns to balance the pole, and a testing phase where the learned policy is visualized.
 
-## Project Description
+# RL_PROJECT
 
-The Cart-Pole problem involves balancing a pole hinged on a cart by moving the cart left or right. This implementation introduces Gaussian noise into the observations to simulate real-world sensor inaccuracies. The Q-Learning algorithm is used to learn the optimal policy for balancing the pole in this noisy environment.
+This project involves implementing reinforcement learning algorithms to solve the Cart-Pole problem. The goal is to develop and compare traditional non-deep RL algorithms and deep RL algorithms to evaluate their performance under sensor noise.
 
-## Dependencies
+## Description of Scripts
 
-The project requires the following Python libraries:
-- `gymnasium`: For the Cart-Pole environment
-- `numpy`: For numerical operations
-- `matplotlib`: For plotting (if you need to visualize training results)
-- `pickle`: For saving and loading the Q-Learning model
+### Training Scripts
 
-You can install these dependencies using pip:
-```sh
-pip install gymnasium numpy matplotlib
-```
+- `DQN.py`: This script contains the implementation of the Deep Q-Network (DQN) algorithm. It trains the DQN agent on the Cart-Pole environment.
 
-## How to Run the Code
+- `new_q_learning.py`: This script trains the Q-Learning agent on the Cart-Pole environment with noise added to the observations.
 
-### Training the Q-Learning Agent
+- `q_learning_cartpole.py`: This script contains the implementation of the Q-Learning algorithm. It trains the Q-Learning agent on the Cart-Pole environment.
 
-1. Save the provided code in a file named `q_learning_cartpole.py`.
-2. Run the script to train the Q-Learning agent:
-```sh
+### Testing Scripts
+
+- `test_dqn.py`: This script tests the trained DQN model on the Cart-Pole environment. It loads a pre-trained DQN model and runs a test episode to visualize the agent's performance.
+
+- `test_q_learning.py`: This script tests the trained Q-Learning model on the Cart-Pole environment. It loads a pre-trained Q-Learning model and runs a test episode to visualize the agent's performance.
+
+### Environment Scripts
+
+- `environment.py`: This script sets up the basic Cart-Pole environment using Gymnasium.
+
+- `environment_with_noise.py`: This script modifies the Cart-Pole environment to introduce noise in its sensors, simulating inaccuracies in position, velocity, pole angle, and angular velocity.
+
+## How to Run
+
+### Training Q-Learning Agent
+
+To train the Q-Learning agent, run the following command:
+
+```bash
 python q_learning_cartpole.py
 ```
-The script will train the Q-Learning agent for 500,000 episodes and save the trained Q-table to a file named `q_learning.pkl`.
 
-### Testing the Q-Learning Agent
+### Training DQN Agent
 
-The testing phase is included in the same script. After training, the script will load the saved Q-table and run a test episode where the learned policy is visualized.
+To train the DQN agent, run the following command:
 
-## Code Explanation
-
-### NoisyObservationWrapper Class
-This class wraps the Cart-Pole environment to introduce Gaussian noise into the observations:
-```python
-class NoisyObservationWrapper(gym.ObservationWrapper):
-    def __init__(self, env, noise_std=0.1):
-        super(NoisyObservationWrapper, self).__init__(env)
-        self.noise_std = noise_std
-
-    def observation(self, obs):
-        noise = np.random.normal(0, self.noise_std, size=obs.shape)
-        noisy_obs = obs + noise
-        return noisy_obs
+```bash
+python DQN.py
 ```
 
-### QLearningAgent Class
-This class implements the Q-Learning algorithm:
-- `__init__`: Initializes the agent with the environment and hyperparameters.
-- `discretize`: Discretizes continuous observations into discrete states.
-- `choose_action`: Chooses an action based on the epsilon-greedy policy.
-- `update_q_table`: Updates the Q-table using the Q-Learning update rule.
-- `train`: Trains the Q-Learning agent.
-- `test`: Tests the trained Q-Learning agent and visualizes the results.
-- `save_model`: Saves the trained Q-table to a file.
-- `load_model`: Loads the Q-table from a file.
+### Testing Q-Learning Agent
 
-### Main Script
-The main script initializes the environment, trains the Q-Learning agent, and tests the trained policy:
-```python
-if __name__ == "__main__":
-    train_env = gym.make('CartPole-v1')
-    noisy_train_env = NoisyObservationWrapper(train_env, noise_std=0.1)
-    agent = QLearningAgent(noisy_train_env)
-    agent.train()
-    
-    test_env = gym.make('CartPole-v1', render_mode='human')
-    noisy_test_env = NoisyObservationWrapper(test_env, noise_std=0.1)
-    agent.env = noisy_test_env
-    agent.test()
-    test_env.close()
+To test the Q-Learning agent, run the following command:
+
+```bash
+python test_q_learning.py
 ```
+
+### Testing DQN Agent
+
+To test the DQN agent, run the following command:
+
+```bash
+python test_dqn.py
+```
+
+## Model and Data Files
+
+### .pkl Files
+
+The `.pkl` files are used to save the trained models and Q-tables. Here are some of the key files:
+
+- `dqn_0.1_new.pkl`, `dqn_0.1.pkl`, `dqn_best_model.pkl`: These files store the trained DQN models.
+- `q_learning_0.pkl`, `q_learning_2.pkl`, `q_learning_3.pkl`, `q_learning_best.pkl`, etc.: These files store the trained Q-Learning models.
+- `qlearning_Q.pkl`: This file stores the Q-table for the Q-Learning agent.
+
+### Comments on Generated Files
+
+- The `q_learning_best.pkl` file contains the best-performing Q-Learning model based on the total reward.
+- The `dqn_best_model.pkl` file contains the best-performing DQN model.
+- The various other `.pkl` files represent different stages of training, noise configurations, or parameter settings.
 
 ## Notes
 
-- You can adjust the noise level by changing the `noise_std` parameter in the `NoisyObservationWrapper` class.
-- The number of training episodes and other hyperparameters can be adjusted in the `QLearningAgent` class.
-- The Q-table is saved to `q_learning.pkl` after training and loaded from the same file for testing.
+- Ensure all dependencies are installed before running the scripts. Key dependencies include Gymnasium, NumPy, Matplotlib, and any other libraries specified in the scripts.
+- The training scripts may take a significant amount of time to run, depending on the number of episodes and the complexity of the model.
+```
 
-Feel free to experiment with different parameters and observe how the agent's performance changes in the noisy environment.
+You can create a file named `README.md` and paste this content into it.
