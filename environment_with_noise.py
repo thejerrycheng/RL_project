@@ -3,14 +3,24 @@
 import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
         super(NoisyObservationWrapper, self).__init__(env)
         self.noise_std = noise_std
+        self.observation_space = env.observation_space
+        
+        # Define the range for each observation component
+        self.obs_ranges = [
+            2,  # cart position range is [-2.4, 2.4]
+            0.5,  # cart velocity range is approximated as [-50, 50]
+            math.radians(20),  # pole angle range is [-12 degrees, 12 degrees]
+            math.radians(0.5)  # pole angular velocity range is approximated as [-50 degrees/s, 50 degrees/s]
+        ]
 
     def observation(self, obs):
-        noise = np.random.normal(0, self.noise_std, size=obs.shape)
+        noise = np.random.normal(0, self.noise_std, size=obs.shape) * self.obs_ranges
         noisy_obs = obs + noise
         return noisy_obs
 

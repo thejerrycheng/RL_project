@@ -14,16 +14,25 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         
         # Define the range for each observation component
         self.obs_ranges = [
-            4.8,  # cart position range is [-2.4, 2.4]
-            100.0,  # cart velocity range is approximated as [-50, 50]
-            math.radians(24),  # pole angle range is [-12 degrees, 12 degrees]
-            math.radians(100)  # pole angular velocity range is approximated as [-50 degrees/s, 50 degrees/s]
+            2,  # cart position range is [-2.4, 2.4]
+            0.5,  # cart velocity range is approximated as [-50, 50]
+            math.radians(20),  # pole angle range is [-12 degrees, 12 degrees]
+            math.radians(0.5)  # pole angular velocity range is approximated as [-50 degrees/s, 50 degrees/s]
         ]
 
     def observation(self, obs):
         noise = np.random.normal(0, self.noise_std, size=obs.shape) * self.obs_ranges
         noisy_obs = obs + noise
         return noisy_obs
+
+    # def __init__(self, env, noise_std=0):
+    #     super(NoisyObservationWrapper, self).__init__(env)
+    #     self.noise_std = noise_std
+
+    # def observation(self, obs):
+    #     noise = np.random.normal(0.1, self.noise_std, size=obs.shape)
+    #     noisy_obs = obs + noise
+    #     return noisy_obs
 
 class QLearningAgent:
     def __init__(self, env, bins=(50, 50, 50, 50), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.999, epsilon_min=0.01, model_filename=None):
@@ -39,9 +48,9 @@ class QLearningAgent:
         # Define smaller bin limits compared to the terminal states
         self.bins_limits = [
             (-2.4, 2.4),  # cart position (terminal state is -4.8 to 4.8)
-            (-50, 50),  # cart velocity (terminal state is -inf to inf, but we use a practical range)
+            (-10, 10),  # cart velocity (terminal state is -inf to inf, but we use a practical range)
             (-math.radians(12), math.radians(12)),  # pole angle (terminal state is -math.radians(24) to math.radians(24))
-            (-math.radians(50), math.radians(50))  # pole angular velocity (terminal state is -inf to inf, but we use a practical range)
+            (-math.radians(10), math.radians(10))  # pole angular velocity (terminal state is -inf to inf, but we use a practical range)
         ]
         
         # Load the model if specified
@@ -71,7 +80,7 @@ class QLearningAgent:
         rewards = []  # Initialize list to store rewards for each episode
 
         episode = 0
-        for epiosde in range(5000000): #5,000,000
+        for epiosde in range(1000000): #5,000,000
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
             done = False
@@ -91,10 +100,10 @@ class QLearningAgent:
             if total_reward > best_total_reward:
                 best_total_reward = total_reward
                 self.save_model(filename=save_filename)  # Save the model if the current total reward is higher than the best total reward
-                print(f"New best total reward: {best_total_reward} - Model saved -----------------------")
+                print(f"Episode: {episode}, Best total reward: {best_total_reward} ") # Print the best total reward
 
             if episode % 100 == 0:
-                print(f"Episode: {episode}, Total reward: {total_reward}, Epsilon: {self.epsilon}")
+                print(f"Episode: {episode}, Total reward: {total_reward}")
 
             episode += 1
 
@@ -105,7 +114,7 @@ class QLearningAgent:
         plt.title('Episode vs. Total Reward')
         plt.show()
 
-    def test(self, episodes=200):
+    def test(self, episodes=20):
         total_rewards = []
 
         for episode in range(episodes):

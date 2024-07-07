@@ -1,3 +1,52 @@
+# import argparse
+# import gymnasium as gym
+# import
+# from q_learning_cartpole import QLearningAgent, NoisyObservationWrapper
+
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser(description='Test Q-Learning for CartPole with Sensor Noise')
+#     parser.add_argument('--model', type=str, required=True, help='Model filename to load')
+#     parser.add_argument('--tests', type=int, default=200, help='Number of tests to conduct')
+#     args = parser.parse_args()
+
+#     test_env = gym.make('CartPole-v1', render_mode='human')
+#     noisy_test_env = NoisyObservationWrapper(test_env, noise_std=0.1)
+#     agent = QLearningAgent(noisy_test_env, model_filename=args.model)
+
+#     def test(episodes=200):
+#         total_rewards = []
+
+#         for episode in range(episodes):
+#             current_state, info = agent.env.reset()
+#             current_state = agent.discretize(current_state)
+#             done = False
+#             total_reward = 0
+
+#             while not done:
+#                 if episode % 20 == 0:
+#                     agent.env.render()
+#                 action = np.argmax(agent.q_table[current_state])  # Choose the action with the highest Q-value
+#                 next_state, reward, done, _, _ = agent.env.step(action)
+#                 next_state = agent.discretize(next_state)
+#                 current_state = next_state
+#                 total_reward += reward
+
+#             total_rewards.append(total_reward)
+#             print("Test Episode: {}, Total reward: {}".format(episode, total_reward))
+
+#         average_reward = np.mean(total_rewards)
+#         highest_reward = np.max(total_rewards)
+#         lowest_reward = np.min(total_rewards)
+
+#         print("Average Reward: {}".format(average_reward))
+#         print("Highest Reward: {}".format(highest_reward))
+#         print("Lowest Reward: {}".format(lowest_reward))
+
+#         agent.env.close()
+
+#     test(args.tests)
+
+
 import gymnasium as gym
 import numpy as np
 import math
