@@ -91,7 +91,7 @@ class DQNAgent:
         # if self.epsilon > self.epsilon_min:
         #     self.epsilon *= self.epsilon_decay
 
-    def train(self, episodes=5000, save_filename=None):
+    def train(self, episodes=10000, save_filename=None):
         if save_filename is None:
             current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             save_filename = f'dqn_{current_time}.pth'
@@ -156,7 +156,7 @@ class DQNAgent:
                 state = next_state
                 total_reward += reward
 
-            print(f"Test Episode: {episode}, Total reward: {total_reward}")
+            print(f"Test Episode: {episode}, Total reward: {total_reward}") 
 
     def save_model(self, filename):
         torch.save(self.model.state_dict(), filename)

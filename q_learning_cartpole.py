@@ -7,17 +7,26 @@ import argparse
 import datetime
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
-    def __init__(self, env, noise_std=0):
+    def __init__(self, env, noise_std=0.1):
         super(NoisyObservationWrapper, self).__init__(env)
         self.noise_std = noise_std
+        self.observation_space = env.observation_space
+        
+        # Define the range for each observation component
+        self.obs_ranges = [
+            4.8,  # cart position range is [-2.4, 2.4]
+            100.0,  # cart velocity range is approximated as [-50, 50]
+            math.radians(24),  # pole angle range is [-12 degrees, 12 degrees]
+            math.radians(100)  # pole angular velocity range is approximated as [-50 degrees/s, 50 degrees/s]
+        ]
 
     def observation(self, obs):
-        noise = np.random.normal(0, self.noise_std, size=obs.shape)
+        noise = np.random.normal(0, self.noise_std, size=obs.shape) * self.obs_ranges
         noisy_obs = obs + noise
         return noisy_obs
 
 class QLearningAgent:
-    def __init__(self, env, bins=(20, 20, 20, 20), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.999, epsilon_min=0.01, model_filename=None):
+    def __init__(self, env, bins=(50, 50, 50, 50), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.999, epsilon_min=0.01, model_filename=None):
         self.env = env
         self.bins = bins
         self.alpha = alpha
@@ -47,7 +56,7 @@ class QLearningAgent:
         return tuple(new_obs)
 
     def choose_action(self, state):
-        if np.random.random() < self.epsilon:
+        if np.random.random() < 0.3:
             return self.env.action_space.sample()
         return np.argmax(self.q_table[state])
 
@@ -62,7 +71,7 @@ class QLearningAgent:
         rewards = []  # Initialize list to store rewards for each episode
 
         episode = 0
-        for epiosde in range(500000):
+        for epiosde in range(5000000): #5,000,000
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
             done = False
@@ -96,7 +105,9 @@ class QLearningAgent:
         plt.title('Episode vs. Total Reward')
         plt.show()
 
-    def test(self, episodes=1):
+    def test(self, episodes=200):
+        total_rewards = []
+
         for episode in range(episodes):
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
@@ -104,14 +115,27 @@ class QLearningAgent:
             total_reward = 0
 
             while not done:
-                self.env.render()
-                action = np.argmax(self.q_table[current_state])
+                if episode % 20 == 0:
+                    self.env.render()
+                action = np.argmax(self.q_table[current_state])  # Choose the action with the highest Q-value
                 next_state, reward, done, _, _ = self.env.step(action)
                 next_state = self.discretize(next_state)
                 current_state = next_state
                 total_reward += reward
 
+            total_rewards.append(total_reward)
             print(f"Test Episode: {episode}, Total reward: {total_reward}")
+
+        average_reward = np.mean(total_rewards)
+        highest_reward = np.max(total_rewards)
+        lowest_reward = np.min(total_rewards)
+
+        print(f"Average Reward: {average_reward}")
+        print(f"Highest Reward: {highest_reward}")
+        print(f"Lowest Reward: {lowest_reward}")
+
+        self.env.close()
+
 
     def save_model(self, filename):
         with open(filename, 'wb') as f:
