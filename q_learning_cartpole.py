@@ -47,9 +47,9 @@ class QLearningAgent:
         
         # Define smaller bin limits compared to the terminal states
         self.bins_limits = [
-            (-4.8, 4.8),  # cart position (terminal state is -4.8 to 4.8)
+            (-2.4, 24.),  # cart position (terminal state is -2.4 to 2.4)
             (-10, 10),  # cart velocity (terminal state is -inf to inf, but we use a practical range)
-            (-math.radians(24), math.radians(24)),  # pole angle (terminal state is -math.radians(24) to math.radians(24))
+            (-math.radians(12), math.radians(12)),  # pole angle (terminal state is -math.radians(12) to math.radians(12))
             (-math.radians(10), math.radians(10))  # pole angular velocity (terminal state is -inf to inf, but we use a practical range)
         ]
         
@@ -135,11 +135,13 @@ class QLearningAgent:
                     self.env.render()
                 action = np.argmax(self.q_table[current_state])  # Choose the action with the highest Q-value
                 next_state, reward, done, _, _ = self.env.step(action)
-                cart_position, cart_velocity, pole_angle, pole_angular_velocity = next_state
-                if abs(cart_position) < 0.1:
-                    reward += 1  # Reward for being close to the middle
-                if abs(pole_angle) < np.radians(2):
-                    reward += 1  # Reward for being close to vertical
+
+                # cart_position, cart_velocity, pole_angle, pole_angular_velocity = next_state
+                # if abs(cart_position) < 0.1:
+                #     reward += 1  # Reward for being close to the middle
+                # if abs(pole_angle) < np.radians(2):
+                #     reward += 1  # Reward for being close to vertical
+                
                 next_state = self.discretize(next_state)
                 current_state = next_state
                 total_reward += reward

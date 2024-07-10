@@ -11,9 +11,10 @@ import datetime
 import argparse
 import matplotlib.pyplot as plt
 import math
+import json
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
-    def __init__(self, env, noise_std=0.1):
+    def __init__(self, env, noise_std=0):
         super(NoisyObservationWrapper, self).__init__(env)
         self.noise_std = noise_std
         self.observation_space = env.observation_space
@@ -142,34 +143,43 @@ class DQNAgent:
         # if self.epsilon > self.epsilon_min:
         #     self.epsilon *= self.epsilon_decay
 
-    def train(self, episodes=10000, save_filename=None):
+    def train(self, episodes=1000, save_filename=None):
         if save_filename is None:
             current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             save_filename = f'dqn_{current_time}.pth'
 
         rewards = []
-        recent_rewards = deque(maxlen=10)
+        recent_rewards = deque(maxlen=100)
         best_total_reward = -float('inf')
+        
 
         for episode in range(episodes):
             state, info = self.env.reset()
             total_reward = 0
+            step = 0
             done = False
 
             while not done:
                 action = self.act(state)
                 next_state, reward, done, _, _ = self.env.step(action)
-                # Custom reward function
-                # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                # reward = (1.0 - (abs(cart_position) / 4.8) - (abs(pole_angle) / 0.418))
                 
-                # if done and total_reward < 500:
-                #     reward = -1.0 - (abs(cart_position) / 4.8) - (abs(pole_angle) / 0.418) # Penalize if the episode ends prematurely
+                # Custom reward function
+                cart_position, cart_velocity, pole_angle, pole_velocity = next_state
+                reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209)
+                
+                if done and total_reward < 500:
+                    reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209)  # Penalize if the episode ends prematurely
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
                 total_reward += reward
+                step += 1
                 self.replay()
+
+                if step > 500:
+                    done = True
+                    print("SUCCESS!")
+                
 
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
@@ -185,10 +195,23 @@ class DQNAgent:
             if episode % 100 == 0:
                 print(f"Episode: {episode}, Total reward: {total_reward}, Average reward: {np.mean(rewards[-100:])}, Epsilon: {self.epsilon}")
 
+            if np.mean(recent_rewards) >= 490:
+                print(f"Environment solved in {episode} episodes!")
+                break
+
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
+        # Save rewards to file
+        rewards_filename = save_filename.replace('.pth', '_rewards.json')
+        with open(rewards_filename, 'w') as f:
+            json.dump(rewards, f)
+
+        # Save plot
         plt.plot(rewards)
         plt.xlabel('Episode')
         plt.ylabel('Total Reward')
         plt.title('Episode vs. Total Reward')
+        plt.savefig(save_filename.replace('.pth', '_plot.png'))
         plt.show()
 
     def test(self, model_filename, episodes=10):
@@ -197,6 +220,7 @@ class DQNAgent:
             state, info = self.env.reset()
             total_reward = 0
             done = False
+            step = 0
 
             while not done:
                 self.env.render()
@@ -206,6 +230,13 @@ class DQNAgent:
                 next_state, reward, done, _, _ = self.env.step(action)
                 state = next_state
                 total_reward += reward
+                step += 1
+                if step >= 500:
+                    done = True
+                    print("SUCCESS!")
+                # if total_reward >= 500:
+                #     done = True
+                #     print("SUCCESS!")
 
             print(f"Test Episode: {episode}, Total reward: {total_reward}") 
 
