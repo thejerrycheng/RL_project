@@ -10,29 +10,80 @@ import random
 import datetime
 import argparse
 import matplotlib.pyplot as plt
+import math
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
         super(NoisyObservationWrapper, self).__init__(env)
         self.noise_std = noise_std
+        self.observation_space = env.observation_space
+        
+        # Define the range for each observation component
+        self.obs_ranges = [
+            2,  # cart position noise range is -2 to 2
+            0.5,  # cart velocity noise range is -0.5 to 0.5
+            math.radians(2),  # pole angle noise range is -20 degrees to 20 degrees
+            math.radians(0.5)  # pole angular velocity noise range is -0.5 degrees/s to 0.5 degrees/s
+        ]
 
     def observation(self, obs):
-        noise = np.random.normal(0, self.noise_std, size=obs.shape)
+        noise = np.random.normal(0, self.noise_std, size=obs.shape) * self.obs_ranges
         noisy_obs = obs + noise
         return noisy_obs
 
+# class DQN(nn.Module):
+#     def __init__(self, input_dim, output_dim):
+#         super(DQN, self).__init__()
+#         self.fc1 = nn.Linear(input_dim, 128)
+#         self.fc2 = nn.Linear(128, 128)
+#         self.fc3 = nn.Linear(128, output_dim)
+
+#     def forward(self, x):
+#         x = torch.relu(self.fc1(x))
+#         x = torch.relu(self.fc2(x))
+#         x = self.fc3(x)
+#         return x 
+
+# A deeper model for better performance
 class DQN(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(input_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, output_dim)
+        self.fc1 = nn.Linear(input_dim, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 128)
+        self.fc4 = nn.Linear(128, 128)
+        self.fc5 = nn.Linear(128, output_dim)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = torch.relu(self.fc3(x))
+        x = torch.relu(self.fc4(x))
+        x = self.fc5(x)
         return x
+
+# CNN model for reshaped cartpole example
+# class DQN(nn.Module):
+#     def __init__(self, input_channels, output_dim):
+#         super(DQN, self).__init__()
+#         self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=8, stride=4)
+#         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+#         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        
+#         self.fc1 = nn.Linear(64 * 7 * 7, 512)
+#         self.fc2 = nn.Linear(512, output_dim)
+
+#     def forward(self, x):
+#         x = torch.relu(self.conv1(x))
+#         x = torch.relu(self.conv2(x))
+#         x = torch.relu(self.conv3(x))
+        
+#         x = x.view(x.size(0), -1)  # Flatten the tensor for the fully connected layer
+#         x = torch.relu(self.fc1(x))
+#         x = self.fc2(x)
+#         return x
+
+
 
 class DQNAgent:
     def __init__(self, env, gamma=0.9, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.995, lr=0.001, batch_size=64, memory_size=10000):
@@ -109,11 +160,11 @@ class DQNAgent:
                 action = self.act(state)
                 next_state, reward, done, _, _ = self.env.step(action)
                 # Custom reward function
-                cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                reward = (1.0 - (abs(cart_position) / 4.8) - (abs(pole_angle) / 0.418))
+                # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
+                # reward = (1.0 - (abs(cart_position) / 4.8) - (abs(pole_angle) / 0.418))
                 
-                if done and total_reward < 500:
-                    reward = -1.0 - (abs(cart_position) / 4.8) - (abs(pole_angle) / 0.418) # Penalize if the episode ends prematurely
+                # if done and total_reward < 500:
+                #     reward = -1.0 - (abs(cart_position) / 4.8) - (abs(pole_angle) / 0.418) # Penalize if the episode ends prematurely
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
