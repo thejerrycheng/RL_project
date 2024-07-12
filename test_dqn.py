@@ -10,8 +10,8 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, help='Model filename to load', required=True)
     args = parser.parse_args()
 
-    test_env = gym.make('CartPole-v1')
-    # test_env = gym.make('CartPole-v1', render_mode='human')
+    # test_env = gym.make('CartPole-v1')
+    test_env = gym.make('CartPole-v1', render_mode='human')
     noisy_test_env = NoisyObservationWrapper(test_env, noise_std=0.1)
     agent = DQNAgent(noisy_test_env)
     agent.load_model(args.model)
@@ -25,7 +25,7 @@ if __name__ == "__main__":
 # import numpy as np
 # import torch
 # import torch.nn as nn
-# import argparse
+# import argparse 
 
 # class NoisyObservationWrapper(gym.ObservationWrapper):
 #     def __init__(self, env, noise_std=0.1):

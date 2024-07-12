@@ -25,15 +25,6 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         noisy_obs = obs + noise
         return noisy_obs
 
-    # def __init__(self, env, noise_std=0):
-    #     super(NoisyObservationWrapper, self).__init__(env)
-    #     self.noise_std = noise_std
-
-    # def observation(self, obs):
-    #     noise = np.random.normal(0.1, self.noise_std, size=obs.shape)
-    #     noisy_obs = obs + noise
-    #     return noisy_obs
-
 class QLearningAgent:
     def __init__(self, env, bins=(15, 15, 15, 15), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.999, epsilon_min=0.01, model_filename=None):
         self.env = env
@@ -65,7 +56,7 @@ class QLearningAgent:
         return tuple(new_obs)
 
     def choose_action(self, state):
-        if np.random.random() < 0.3:
+        if np.random.random() < self.epsilon:
             return self.env.action_space.sample()
         return np.argmax(self.q_table[state])
 
@@ -101,7 +92,7 @@ class QLearningAgent:
                 current_state = next_state
                 total_reward += reward
 
-            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+            # self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
             rewards.append(total_reward)  # Store the total reward for this episode
 
             if total_reward > best_total_reward:

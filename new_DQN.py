@@ -32,19 +32,6 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         noisy_obs = obs + noise
         return noisy_obs
 
-# class DQN(nn.Module):
-#     def __init__(self, input_dim, output_dim):
-#         super(DQN, self).__init__()
-#         self.fc1 = nn.Linear(input_dim, 128)
-#         self.fc2 = nn.Linear(128, 128)
-#         self.fc3 = nn.Linear(128, output_dim)
-
-#     def forward(self, x):
-#         x = torch.relu(self.fc1(x))
-#         x = torch.relu(self.fc2(x))
-#         x = self.fc3(x)
-#         return x 
-
 # A deeper model for better performance
 class DQN(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -63,27 +50,21 @@ class DQN(nn.Module):
         x = self.fc5(x)
         return x
 
-# CNN model for reshaped cartpole example
-# class DQN(nn.Module):
-#     def __init__(self, input_channels, output_dim):
-#         super(DQN, self).__init__()
-#         self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=8, stride=4)
-#         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-#         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
-        
-#         self.fc1 = nn.Linear(64 * 7 * 7, 512)
-#         self.fc2 = nn.Linear(512, output_dim)
 
-#     def forward(self, x):
-#         x = torch.relu(self.conv1(x))
-#         x = torch.relu(self.conv2(x))
-#         x = torch.relu(self.conv3(x))
-        
-#         x = x.view(x.size(0), -1)  # Flatten the tensor for the fully connected layer
-#         x = torch.relu(self.fc1(x))
-#         x = self.fc2(x)
-#         return x
 
+def reward_fun1(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
+        reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209)
+        if done and total_reward < 500:
+            reward = -1.0  # Penalize if the episode ends prematurely
+        return reward
+
+def reward_fun2(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
+    reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+    if done and total_reward < 500:
+        reward = -1.0  # Penalize if the episode ends prematurely
+    return reward
+
+# Add more reward functions as needed...
 
 class DQNAgent:
     def __init__(self, env, gamma=0.9, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.995, lr=0.001, batch_size=64, memory_size=10000, reward_fun='reward_fun1'):
@@ -141,29 +122,7 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
-        # if self.epsilon > self.epsilon_min:
-        #     self.epsilon *= self.epsilon_decay
 
-
-    def reward_fun1(self, cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
-        # Reward for staying near the center
-        reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
-        
-        if done and total_reward < 500:
-            reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
-        return reward
-    
-    def reward_fun2(self, cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
-        if abs(cart_position) < 0.5 and abs(pole_angle) < 0.05:
-            reward = 1.0
-        else:
-            # Penalize deviations from the center
-            reward = - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209)
-
-        if done and total_reward < 500:
-            reward = -1.0  # Penalize if the episode ends prematurely
-        return reward
-    
 
 
     def train(self, episodes=1000, save_filename=None):
@@ -174,7 +133,6 @@ class DQNAgent:
         rewards = []
         recent_rewards = deque(maxlen=100)
         best_total_reward = -float('inf')
-        
 
         for episode in range(episodes):
             state, info = self.env.reset()
@@ -186,9 +144,9 @@ class DQNAgent:
                 action = self.act(state)
                 next_state, reward, done, _, _ = self.env.step(action)
                 
-                # # Custom reward function
+                # Custom reward function
                 cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done) ## Very Important line for changing reward function
+                reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
@@ -199,7 +157,10 @@ class DQNAgent:
                 if step > 500:
                     done = True
                     print("SUCCESS!")
-            
+                else:
+                    done = False
+                    print("FAILURE!")
+
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
 
@@ -258,9 +219,6 @@ class DQNAgent:
                 if step >= 500:
                     done = True
                     print("SUCCESS!")
-                # if total_reward >= 500:
-                #     done = True
-                #     print("SUCCESS!")
 
             print(f"Test Episode: {episode}, Total reward: {total_reward}") 
 
