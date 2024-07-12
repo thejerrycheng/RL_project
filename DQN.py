@@ -86,7 +86,7 @@ class DQN(nn.Module):
 
 
 class DQNAgent:
-    def __init__(self, env, gamma=0.9, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.995, lr=0.001, batch_size=64, memory_size=10000, reward_fun='reward_fun1'):
+    def __init__(self, env, gamma=0.9, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.995, lr=0.001, batch_size=64, memory_size=10000):
         self.env = env
         self.gamma = gamma
         self.epsilon = epsilon
@@ -104,7 +104,6 @@ class DQNAgent:
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.loss_fn = nn.MSELoss()
 
-        self.reward_fun = globals()[reward_fun]
 
     def update_target_model(self):
         self.target_model.load_state_dict(self.model.state_dict())
@@ -188,7 +187,12 @@ class DQNAgent:
                 
                 # # Custom reward function
                 cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done) ## Very Important line for changing reward function
+                reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+                
+                if done and total_reward < 500:
+                    reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
+            
+                # reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done) ## Very Important line for changing reward function
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
@@ -233,7 +237,7 @@ class DQNAgent:
         plt.savefig(save_filename.replace('.pth', '_plot.png'))
         plt.show()
 
-    def test(self, model_filename, episodes=10):
+    def test(self, model_filename, episodes=10, disturbance_step=100, disturbance_magnitude=2.0):
         self.load_model(model_filename)
         for episode in range(episodes):
             state, info = self.env.reset()
@@ -247,10 +251,19 @@ class DQNAgent:
                 with torch.no_grad():
                     action = np.argmax(self.model(state).cpu().data.numpy())
                 next_state, reward, done, _, _ = self.env.step(action)
+                
+                # Apply disturbance at the specific time step
+                if step == disturbance_step:
+                    next_state[3] += 4  # Apply disturbance to pole angular velocity
+                    next_state[1] += 100 # Apply disturbance to pole angular velocity
+                    print("Disturbance applied! ------------------")
 
                 # Custom reward function
                 cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
+                reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+                
+                if done and total_reward < 500:
+                    reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
 
                 state = next_state
                 total_reward += reward
@@ -258,11 +271,9 @@ class DQNAgent:
                 if step >= 500:
                     done = True
                     print("SUCCESS!")
-                # if total_reward >= 500:
-                #     done = True
-                #     print("SUCCESS!")
-
+            
             print(f"Test Episode: {episode}, Total reward: {total_reward}") 
+
 
     def save_model(self, filename):
         torch.save(self.model.state_dict(), filename)
@@ -287,7 +298,7 @@ if __name__ == "__main__":
 
     train_env = gym.make('CartPole-v1')
     noisy_train_env = NoisyObservationWrapper(train_env, noise_std=0.1)
-    agent = DQNAgent(noisy_train_env, reward_fun=args.reward)
+    agent = DQNAgent(noisy_train_env)
     if args.load:
         agent.load_model(args.load)
     agent.train(save_filename=save_filename)
