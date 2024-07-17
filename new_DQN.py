@@ -51,7 +51,6 @@ class DQN(nn.Module):
         return x
 
 
-
 def reward_fun1(self, cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
         # Reward for staying near the center
         reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
@@ -234,7 +233,7 @@ class DQNAgent:
                 cart_position, cart_velocity, pole_angle, pole_velocity = next_state
                 reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
                 
-                if done and total_reward < 500:
+                if done and step < 500:
                     reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
 
                 state = next_state
