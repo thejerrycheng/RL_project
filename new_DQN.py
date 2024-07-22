@@ -130,8 +130,6 @@ class DQNAgent:
         self.optimizer.step()
 
 
-
-
     def train(self, episodes=1000, save_filename=None):
         if save_filename is None:
             current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
