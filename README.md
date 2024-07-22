@@ -26,6 +26,8 @@ This project involves implementing reinforcement learning algorithms to solve th
 
 - `environment_with_noise.py`: This script modifies the Cart-Pole environment to introduce noise in its sensors, simulating inaccuracies in position, velocity, pole angle, and angular velocity.
 
+- `environment_with_noise_variations.py`: This script provides different variations of the Cart-Pole environment with varying types of noise distributions models and biases.
+
 ## How to Run
 
 ### Training Q-Learning Agent
