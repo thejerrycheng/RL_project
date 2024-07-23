@@ -2,6 +2,7 @@ import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import os
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1, noise_type='gaussian', bias=0.0):
@@ -76,6 +77,11 @@ def plot_comparisons(cart_positions, noisy_cart_positions, pole_angles, noisy_po
     """
     time_steps = range(len(cart_positions))
 
+    # Create directory for saving plots
+    plot_dir = 'noisy_observation_plots'
+    if not os.path.exists(plot_dir):
+        os.makedirs(plot_dir)
+
     plt.figure(figsize=(12, 6))
 
     plt.subplot(2, 1, 1)
@@ -95,6 +101,8 @@ def plot_comparisons(cart_positions, noisy_cart_positions, pole_angles, noisy_po
     plt.legend()
 
     plt.tight_layout()
+    plot_path = os.path.join(plot_dir, f'comparison_plot_{title.replace(" ", "_")}.png')
+    plt.savefig(plot_path)
     plt.show()
 
 if __name__ == "__main__":

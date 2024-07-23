@@ -58,6 +58,7 @@ def setup_noisy_environment(noise_std=0.1):
     # Plot the cart positions and pole angles
     plot_comparisons(cart_positions, noisy_cart_positions, pole_angles, noisy_pole_angles)
 
+
 def plot_comparisons(cart_positions, noisy_cart_positions, pole_angles, noisy_pole_angles):
     """
     Plots the ground truth and noisy cart positions and pole angles over time.
@@ -84,6 +85,7 @@ def plot_comparisons(cart_positions, noisy_cart_positions, pole_angles, noisy_po
 
     plt.tight_layout()
     plt.show()
+
 
 if __name__ == "__main__":
     # You can change the noise_std to study its impact

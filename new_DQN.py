@@ -71,7 +71,7 @@ def reward_fun2(self, cart_position, cart_velocity, pole_angle, pole_velocity, t
     return reward
     
 
-# Add more reward functions as needed...
+# Add more reward functions for experiments 
 
 class DQNAgent:
     def __init__(self, env, gamma=0.9, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.995, lr=0.001, batch_size=64, memory_size=10000, reward_fun='reward_fun1'):
@@ -158,7 +158,6 @@ class DQNAgent:
                 
                 if done and total_reward < 500:
                     reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
-
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
