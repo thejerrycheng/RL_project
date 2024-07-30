@@ -74,13 +74,14 @@ def reward_fun2(self, cart_position, cart_velocity, pole_angle, pole_velocity, t
 # Add more reward functions for experiments 
 
 class DQNAgent:
-    def __init__(self, env, gamma=0.9, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.995, lr=0.0001, batch_size=64, memory_size=10000, reward_fun='reward_fun1'):
+    def __init__(self, env, update_rate = 10, gamma=0.9, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.999, lr=0.001, batch_size=64, memory_size=10000, reward_fun='reward_fun1'):
         self.env = env
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
         self.lr = lr
+        self.update_rate = update_rate
         self.batch_size = batch_size
         self.memory = deque(maxlen=memory_size)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -151,12 +152,11 @@ class DQNAgent:
                 
                 # Custom reward function
                 cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
-                # Custom reward function
-                # reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
                 
-                # if done and total_reward < 500:
-                #     reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
+                reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+        
+                if done and total_reward < 500:
+                    reward = -0.1 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
@@ -169,7 +169,7 @@ class DQNAgent:
                     print("SUCCESS!")
                 else:
                     done = False
-                    # print("FAILURE!")
+                    print("FAILURE!")
 
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
@@ -179,10 +179,8 @@ class DQNAgent:
                 self.save_model(save_filename)
                 print(f"New best total reward: {best_total_reward} - Model saved")
 
-            if episode % 10 == 0:
+            if episode % self.update_rate == 0:
                 self.update_target_model()
-
-            if episode % 10 == 0:
                 print(f"Episode: {episode}, Average reward: {np.mean(rewards[-10:])}")
 
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
