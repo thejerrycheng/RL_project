@@ -74,7 +74,7 @@ def reward_fun2(self, cart_position, cart_velocity, pole_angle, pole_velocity, t
 # Add more reward functions for experiments 
 
 class DQNAgent:
-    def __init__(self, env, update_rate = 10, gamma=0.9, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.999, lr=0.001, batch_size=64, memory_size=10000, reward_fun='reward_fun1'):
+    def __init__(self, env, update_rate = 10, gamma=0.9, epsilon=0.99, epsilon_min=0.01, epsilon_decay=0.9995, lr=0.0001, batch_size=64, memory_size=10000, reward_fun='reward_fun1'):
         self.env = env
         self.gamma = gamma
         self.epsilon = epsilon
@@ -131,7 +131,7 @@ class DQNAgent:
         self.optimizer.step()
 
 
-    def train(self, episodes=10000, save_filename=None):
+    def train(self, episodes=100000, save_filename=None):
         if save_filename is None:
             current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             save_filename = f'dqn_{current_time}.pth'
@@ -150,13 +150,13 @@ class DQNAgent:
                 action = self.act(state)
                 next_state, reward, done, _, _ = self.env.step(action)
                 
-                # Custom reward function
-                cart_position, cart_velocity, pole_angle, pole_velocity = next_state
+                #Custom reward function
+                # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
                 
-                reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+                # reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0) # Reward for staying near the center
         
-                if done and total_reward < 500:
-                    reward = -0.1 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
+                # if done and total_reward < 500:
+                #     reward = -0.1 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
@@ -164,12 +164,12 @@ class DQNAgent:
                 step += 1
                 self.replay()
 
-                if step > 500:
-                    done = True
-                    print("SUCCESS!")
-                else:
-                    done = False
-                    print("FAILURE!")
+                # if step > 500:
+                #     done = True
+                #     print("SUCCESS!")
+                # else:
+                #     done = False
+                #     print("FAILURE!")
 
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
@@ -181,9 +181,11 @@ class DQNAgent:
 
             if episode % self.update_rate == 0:
                 self.update_target_model()
-                print(f"Episode: {episode}, Average reward: {np.mean(rewards[-10:])}")
-
+                print(f"Episode: {episode}, Average reward: {np.mean(rewards[-10:])}, Epsilon: {self.epsilon}, Step: {step}") # Print average reward of last 10 episodes, epsilon, and step
+            
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
+            
 
         # Save plot
         plt.plot(rewards)
