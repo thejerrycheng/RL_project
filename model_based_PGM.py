@@ -7,6 +7,7 @@ import torch.optim as optim
 from collections import deque
 import random
 import matplotlib.pyplot as plt
+import math
 
 # Define the dynamics model
 class DynamicsModel(nn.Module):
@@ -47,12 +48,16 @@ class PolicyNetwork(nn.Module):
         super(PolicyNetwork, self).__init__()
         self.fc1 = nn.Linear(state_dim, 256)
         self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, action_dim)
+        self.fc3 = nn.Linear(256, 256)
+        self.fc4 = nn.Linear(256, 128)
+        self.fc5 = nn.Linear(128, action_dim)
 
     def forward(self, state):
         x = torch.relu(self.fc1(state))
         x = torch.relu(self.fc2(x))
-        action_probs = torch.softmax(self.fc3(x), dim=-1)
+        x = torch.relu(self.fc3(x))
+        x = torch.relu(self.fc4(x))
+        action_probs = torch.softmax(self.fc5(x), dim=-1)
         return action_probs
 
 # Define the model-based agent
@@ -71,6 +76,7 @@ class ModelBasedAgent:
         self.policy_optimizer = optim.Adam(self.policy_network.parameters(), lr=policy_lr)
         self.gamma = gamma
         self.memory = deque(maxlen=10000)
+        self.loss = math.inf
 
         # Create directory for saving models
         self.model_save_path = "saved_policy_models"
@@ -142,6 +148,7 @@ class ModelBasedAgent:
 
 
     def select_action(self, state):
+        # print("State:", state)
         # Ensure the state is a 2D tensor (batch size of 1)
         state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         
@@ -149,7 +156,7 @@ class ModelBasedAgent:
         action_probs = self.policy_network(state).squeeze(0)  # Remove the batch dimension
         
         # Check shape of action_probs for debugging
-        print("Action probabilities shape:", action_probs.shape)
+        # print("Action probabilities:", action_probs.numpy())
         
         # Convert action probabilities to a 1D NumPy array
         action_probs = action_probs.cpu().detach().numpy()
@@ -158,7 +165,7 @@ class ModelBasedAgent:
         action_probs = action_probs / np.sum(action_probs)
         
         # Print action_probs to ensure they're correctly shaped
-        print("Normalized action probabilities:", action_probs)
+        # print("Normalized action probabilities:", action_probs)
         
         # Choose an action based on the probabilities
         action = np.random.choice(self.action_dim, p=action_probs)
@@ -166,9 +173,9 @@ class ModelBasedAgent:
         return action
 
 
-
-    def train_policy(self, num_episodes=100):
+    def train_policy(self, num_episodes=100000):
         rewards_per_episode = []  # Store total rewards for each episode
+        highest_reward = -float('inf')  # Initialize the highest reward
 
         for episode in range(num_episodes):
             state, _ = self.env.reset()
@@ -176,24 +183,37 @@ class ModelBasedAgent:
             total_reward = 0  # Total reward for the current episode
             while not done:
                 action = self.select_action(state)
+
+                next_state, reward, done, _, _ = self.env.step(action)
+
                 # Simulate with the dynamics model
-                predicted_next_state, predicted_reward = self.dynamics_model(
-                    torch.FloatTensor(state).to(self.device),  # Ensure state is 2D
-                    torch.LongTensor(action).squeeze(1).to(self.device)  # Ensure action is 2D
-                )
+                # predicted_next_state, predicted_reward = self.dynamics_model(
+                #     torch.FloatTensor(state).to(self.device),  # Ensure state is 2D
+                #     torch.LongTensor(action).to(self.device)  # Ensure action is 2D
+                # )
 
                 # Accumulate rewards
-                total_reward += predicted_reward
+                # total_reward += predicted_reward
+                total_reward += reward
 
-                state = predicted_next_state
+                # state = predicted_next_state.detach().squeeze(0).numpy()  # Ensure state is a NumPy array
+                state = next_state
 
             # Save the total reward for this episode
             rewards_per_episode.append(total_reward)
-            print(f"Episode {episode + 1}: Total Reward: {total_reward}")
+            print(f"Episode {episode + 1}: Total Reward: {total_reward}, Total loss: {self.loss}")
+
+            # Save the model if a new highest reward is found
+            if total_reward > highest_reward:
+                highest_reward = total_reward
+                model_filename = f"policy_model_highest_reward_{highest_reward:.4f}.pth"
+                model_filepath = os.path.join(self.model_save_path, model_filename)
+                torch.save(self.policy_network.state_dict(), model_filepath)
+                print(f"New highest reward {highest_reward:.4f} found, model saved to {model_filepath} ------------------------")
 
             # Update policy every 10 episodes
-            if (episode + 1) % 10 == 0:
-                self.update_policy(rewards_per_episode[-10:])  # Pass the last 10 episodes' rewards
+            # if (episode + 1) % 2 == 0:
+            self.update_policy(rewards_per_episode[-1:])  # Pass the last 2 episodes' rewards
 
         # Save rewards for plotting
         self.rewards_per_episode = rewards_per_episode
@@ -219,7 +239,9 @@ class ModelBasedAgent:
         loss.backward()
         self.policy_optimizer.step()
 
-        print(f"Updated policy with mean reward: {mean_reward}")
+        # print(f"Updated policy with mean reward: {mean_reward}")
+
+
 
     def reward_function(self, state):
         # Define your custom reward function here
@@ -258,30 +280,32 @@ if __name__ == "__main__":
     agent.train_dynamics_model()
 
     # Plot the training loss
-    agent.plot_loss()
+    # agent.plot_loss()
 
-    state, _ = env.reset()
-    print("Initial state:", state)
-    done = False
-    total_reward = 0  # Total reward for the current episode
-    action = agent.select_action(state)
-    print("Selected action:", action)
+    # state, _ = env.reset()
+    # print("Initial state:", state)
+    # done = False
+    # total_reward = 0  # Total reward for the current episode
+    # action = agent.select_action(state)
+    # print("Selected action:", action)
     # Simulate with the dynamics model
-    predicted_next_state, predicted_reward = agent.dynamics_model(
-        torch.FloatTensor(state).unsqueeze(0).to(agent.device),  # Ensure state is 2D
-        torch.LongTensor([action]).unsqueeze(0).to(agent.device)  # Ensure action is 2D
-    )
-    print("Predicted next state:", predicted_next_state)
-    print("Predicted reward:", predicted_reward)
-    print("The state input tensor looks like", torch.FloatTensor(state).to(agent.device)) # this is the correct dimension
-    print("The action input tensor looks like", torch.LongTensor(action).unsqueeze(1).to(agent.device)) # this is the correct dimension
-    print("The state tensor is on the device:", predicted_next_state.detach().squeeze(0).numpy()) # this is the correct dimension
-    print("The reward tensor is on the device:", predicted_reward.detach().numpy()) # this is the correct dimension
+    # predicted_next_state, predicted_reward = agent.dynamics_model(
+    #     torch.FloatTensor(state).unsqueeze(0).to(agent.device),  # Ensure state is 2D
+    #     torch.LongTensor([action]).unsqueeze(0).to(agent.device)  # Ensure action is 2D
+    # )
+    # print("Predicted next state:", predicted_next_state)
+    # print("Predicted reward:", predicted_reward)
+    # print("The state input tensor looks like", torch.FloatTensor(state).to(agent.device)) # this is the correct dimension
+    # print("The action input tensor looks like", torch.LongTensor(action).unsqueeze(1).to(agent.device)) # this is the correct dimension
+    # print("The state tensor is on the device:", predicted_next_state.detach().squeeze(0).numpy()) # this is the correct dimension
+    # print("The reward tensor is on the device:", predicted_reward.detach().numpy()) # this is the correct dimension
+
+    
     # Train policy
-    # agent.train_policy()
+    agent.train_policy()
 
     # Plot the rewards
-    # agent.plot_rewards()
+    agent.plot_rewards()
 
     # Test policy
     # for _ in range(10):
