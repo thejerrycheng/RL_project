@@ -1,4 +1,5 @@
 import os
+import argparse
 import gymnasium as gym
 import numpy as np
 import torch
@@ -50,39 +51,44 @@ class PolicyNetwork(nn.Module):
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 256)
         self.fc4 = nn.Linear(256, 128)
-        self.fc5 = nn.Linear(128, action_dim)
+        self.policy_head = nn.Linear(128, action_dim)
+        self.value_head = nn.Linear(128, 1)
 
     def forward(self, state):
         x = torch.relu(self.fc1(state))
         x = torch.relu(self.fc2(x))
         x = torch.relu(self.fc3(x))
         x = torch.relu(self.fc4(x))
-        action_probs = torch.softmax(self.fc5(x), dim=-1)
-        return action_probs
+        action_probs = torch.softmax(self.policy_head(x), dim=-1)
+        state_value = self.value_head(x)
+        return action_probs, state_value
 
 # Define the model-based agent
 class ModelBasedAgent:
-    def __init__(self, env, dynamics_lr=0.001, policy_lr=0.0001, gamma=0.99):
+    def __init__(self, env, dynamics_lr=0.001, policy_lr=0.0003, gamma=0.99, clip_param=0.2, ppo_epochs=10, batch_size=64):
         self.env = env
         self.state_dim = env.observation_space.shape[0]
         self.action_dim = env.action_space.n
-        
+
         # Define the device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         self.dynamics_model = DynamicsModel(self.state_dim, self.action_dim).to(self.device)
         self.policy_network = PolicyNetwork(self.state_dim, self.action_dim).to(self.device)
         self.dynamics_optimizer = optim.Adam(self.dynamics_model.parameters(), lr=dynamics_lr)
         self.policy_optimizer = optim.Adam(self.policy_network.parameters(), lr=policy_lr)
         self.gamma = gamma
+        self.loss = 0
+        self.clip_param = clip_param
+        self.ppo_epochs = ppo_epochs
+        self.batch_size = batch_size
         self.memory = deque(maxlen=10000)
-        self.loss = math.inf
 
         # Create directory for saving models
         self.model_save_path = "saved_policy_models"
         os.makedirs(self.model_save_path, exist_ok=True)
 
-         # Create directory for saving models
+        # Create directory for saving dynamics models
         self.dynamics_model_save_path = "saved_dynamics_models"
         os.makedirs(self.dynamics_model_save_path, exist_ok=True)
 
@@ -146,34 +152,15 @@ class ModelBasedAgent:
                 torch.save(self.dynamics_model.state_dict(), model_filepath)
                 print(f"Model saved to {model_filepath}")
 
-
     def select_action(self, state):
-        # print("State:", state)
-        # Ensure the state is a 2D tensor (batch size of 1)
         state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        
-        # Forward pass through the policy network to get action probabilities
-        action_probs = self.policy_network(state).squeeze(0)  # Remove the batch dimension
-        
-        # Check shape of action_probs for debugging
-        # print("Action probabilities:", action_probs.numpy())
-        
-        # Convert action probabilities to a 1D NumPy array
-        action_probs = action_probs.cpu().detach().numpy()
-        
-        # Ensure probabilities sum to 1 by adding a small value and normalizing
+        action_probs, _ = self.policy_network(state)
+        action_probs = action_probs.squeeze(0).cpu().detach().numpy()
         action_probs = action_probs / np.sum(action_probs)
-        
-        # Print action_probs to ensure they're correctly shaped
-        # print("Normalized action probabilities:", action_probs)
-        
-        # Choose an action based on the probabilities
         action = np.random.choice(self.action_dim, p=action_probs)
-        
         return action
 
-
-    def train_policy(self, num_episodes=100000):
+    def train_policy(self, num_episodes=5000):
         rewards_per_episode = []  # Store total rewards for each episode
         highest_reward = -float('inf')  # Initialize the highest reward
 
@@ -181,70 +168,84 @@ class ModelBasedAgent:
             state, _ = self.env.reset()
             done = False
             total_reward = 0  # Total reward for the current episode
+            states = []
+            actions = []
+            rewards = []
+            state_values = []
+            log_probs = []
+            step = 0
+
             while not done:
                 action = self.select_action(state)
-
                 next_state, reward, done, _, _ = self.env.step(action)
 
-                # Simulate with the dynamics model
-                # predicted_next_state, predicted_reward = self.dynamics_model(
-                #     torch.FloatTensor(state).to(self.device),  # Ensure state is 2D
-                #     torch.LongTensor(action).to(self.device)  # Ensure action is 2D
-                # )
+                states.append(state)
+                actions.append(action)
+                rewards.append(reward)
+                state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+                action_probs, state_value = self.policy_network(state_tensor)
+                state_values.append(state_value.item())
+                log_prob = torch.log(action_probs.squeeze(0)[action])
+                log_probs.append(log_prob.item())
 
-                # Accumulate rewards
-                # total_reward += predicted_reward
                 total_reward += reward
-
-                # state = predicted_next_state.detach().squeeze(0).numpy()  # Ensure state is a NumPy array
                 state = next_state
+                step += 1
 
-            # Save the total reward for this episode
+                if step > 1000:
+                    print("Success")
+                    break
+
             rewards_per_episode.append(total_reward)
-            print(f"Episode {episode + 1}: Total Reward: {total_reward}, Total loss: {self.loss}")
+            print(f"Episode {episode + 1}: Total Reward: {total_reward}")
 
-            # Save the model if a new highest reward is found
             if total_reward > highest_reward:
                 highest_reward = total_reward
-                model_filename = f"policy_model_highest_reward_{highest_reward:.4f}.pth"
+                model_filename = f"policy_model_highest_reward.pth"
                 model_filepath = os.path.join(self.model_save_path, model_filename)
                 torch.save(self.policy_network.state_dict(), model_filepath)
-                print(f"New highest reward {highest_reward:.4f} found, model saved to {model_filepath} ------------------------")
+                print(f"New highest reward {highest_reward:.4f} found, model saved to {model_filepath}, Loss: {self.loss}")
 
-            # Update policy every 10 episodes
-            # if (episode + 1) % 2 == 0:
-            self.update_policy(rewards_per_episode[-1:])  # Pass the last 2 episodes' rewards
+            self.update_policy(states, actions, rewards, state_values, log_probs)
 
-        # Save rewards for plotting
         self.rewards_per_episode = rewards_per_episode
 
-    def update_policy(self, recent_rewards):
-        # Calculate the mean reward over the recent episodes
-        mean_reward = np.mean(recent_rewards)
+    def update_policy(self, states, actions, rewards, state_values, log_probs):
+        discounted_rewards = []
+        cumulative = 0
+        for reward in reversed(rewards):
+            cumulative = reward + self.gamma * cumulative
+            discounted_rewards.insert(0, cumulative)
 
-        # Sample states from memory to update the policy
-        states, actions, rewards, next_states, dones = zip(*random.sample(self.memory, 64))
-        states = torch.FloatTensor(states).to(self.device)
-        actions = torch.LongTensor(actions).to(self.device)
+        discounted_rewards = torch.FloatTensor(discounted_rewards).to(self.device)
+        state_values = torch.FloatTensor(state_values).to(self.device)
+        log_probs = torch.FloatTensor(log_probs).to(self.device)
 
-        # Forward pass through the policy network
-        action_probs = self.policy_network(states)
+        advantages = discounted_rewards - state_values
+        old_log_probs = log_probs.detach()
 
-        # Calculate the log probabilities of the taken actions
-        log_probs = torch.log(action_probs[range(len(actions)), actions])
+        for _ in range(self.ppo_epochs):
+            for i in range(0, len(states), self.batch_size):
+                sampled_indices = slice(i, i + self.batch_size)
+                sampled_states = torch.FloatTensor(states[sampled_indices]).to(self.device)
+                sampled_actions = torch.LongTensor(actions[sampled_indices]).to(self.device)
+                sampled_advantages = advantages[sampled_indices].detach()
+                sampled_old_log_probs = old_log_probs[sampled_indices]
 
-        # Update the policy network using the mean reward as a baseline
-        loss = -(log_probs * mean_reward).mean()
-        self.policy_optimizer.zero_grad()
-        loss.backward()
-        self.policy_optimizer.step()
+                action_probs, state_values = self.policy_network(sampled_states)
+                log_probs = torch.log(action_probs[range(len(sampled_actions)), sampled_actions])
+                ratio = torch.exp(log_probs - sampled_old_log_probs)
+                surr1 = ratio * sampled_advantages
+                surr2 = torch.clamp(ratio, 1 - self.clip_param, 1 + self.clip_param) * sampled_advantages
 
-        # print(f"Updated policy with mean reward: {mean_reward}")
+                policy_loss = -torch.min(surr1, surr2).mean()
+                value_loss = nn.MSELoss()(state_values.squeeze(-1), discounted_rewards[sampled_indices])
 
-
+                self.policy_optimizer.zero_grad()
+                (policy_loss + value_loss).backward()
+                self.policy_optimizer.step()
 
     def reward_function(self, state):
-        # Define your custom reward function here
         cart_position, cart_velocity, pole_angle, pole_velocity = state
         reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209)
         return reward
@@ -269,9 +270,21 @@ class ModelBasedAgent:
         plt.grid(True)
         plt.show()
 
+    def load_model(self, filepath):
+        self.policy_network.load_state_dict(torch.load(filepath, map_location=self.device))
+        self.policy_network.eval()
+        print(f"Loaded model from {filepath}")
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Model-Based RL with PPO')
+    parser.add_argument('--load', type=str, help='Path to the pre-trained policy model')
+    args = parser.parse_args()
+
     env = gym.make('CartPole-v1')
     agent = ModelBasedAgent(env)
+
+    if args.load:
+        agent.load_model(args.load)
 
     # Collect initial data
     agent.collect_data()
@@ -280,27 +293,8 @@ if __name__ == "__main__":
     agent.train_dynamics_model()
 
     # Plot the training loss
-    # agent.plot_loss()
+    agent.plot_loss()
 
-    # state, _ = env.reset()
-    # print("Initial state:", state)
-    # done = False
-    # total_reward = 0  # Total reward for the current episode
-    # action = agent.select_action(state)
-    # print("Selected action:", action)
-    # Simulate with the dynamics model
-    # predicted_next_state, predicted_reward = agent.dynamics_model(
-    #     torch.FloatTensor(state).unsqueeze(0).to(agent.device),  # Ensure state is 2D
-    #     torch.LongTensor([action]).unsqueeze(0).to(agent.device)  # Ensure action is 2D
-    # )
-    # print("Predicted next state:", predicted_next_state)
-    # print("Predicted reward:", predicted_reward)
-    # print("The state input tensor looks like", torch.FloatTensor(state).to(agent.device)) # this is the correct dimension
-    # print("The action input tensor looks like", torch.LongTensor(action).unsqueeze(1).to(agent.device)) # this is the correct dimension
-    # print("The state tensor is on the device:", predicted_next_state.detach().squeeze(0).numpy()) # this is the correct dimension
-    # print("The reward tensor is on the device:", predicted_reward.detach().numpy()) # this is the correct dimension
-
-    
     # Train policy
     agent.train_policy()
 
@@ -308,12 +302,25 @@ if __name__ == "__main__":
     agent.plot_rewards()
 
     # Test policy
-    # for _ in range(10):
-    #     state, _ = env.reset()
-    #     done = False
-    #     total_reward = 0
-    #     while not done:
-    #         action = agent.select_action(state)
-    #         state, reward, done, _, _ = env.step(action)
-    #         total_reward += reward
-    #     print(f"Total reward: {total_reward}")
+    test_rewards = []  # List to store rewards for each test episode
+    env = gym.make('CartPole-v1', render_mode='human')
+    for episode in range(10):
+        state, _ = env.reset()
+        done = False
+        total_reward = 0
+        while not done:
+            action = agent.select_action(state)
+            state, reward, done, _, _ = env.step(action)
+            total_reward += reward
+        test_rewards.append(total_reward)
+        print(f"Test Episode {episode + 1}: Total Reward: {total_reward}")
+
+    # Plot the test rewards
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, len(test_rewards) + 1), test_rewards, marker='o', label='Test Rewards')
+    plt.xlabel('Test Episode')
+    plt.ylabel('Total Reward')
+    plt.title('Test Rewards per Episode')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
