@@ -10,6 +10,27 @@ import random
 import matplotlib.pyplot as plt
 import math
 
+
+class NoisyObservationWrapper(gym.ObservationWrapper):
+    def __init__(self, env, noise_std=0.1):
+        super(NoisyObservationWrapper, self).__init__(env)
+        self.noise_std = noise_std
+        self.observation_space = env.observation_space
+        
+        # Define the range for each observation component
+        self.obs_ranges = [
+            2,  # cart position range is [-2.4, 2.4]
+            0.5,  # cart velocity range is approximated as [-50, 50]
+            math.radians(20),  # pole angle range is [-12 degrees, 12 degrees]
+            math.radians(0.5)  # pole angular velocity range is approximated as [-50 degrees/s, 50 degrees/s]
+        ]
+
+    def observation(self, obs):
+        noise = np.random.normal(0, self.noise_std, size=obs.shape) * self.obs_ranges
+        noisy_obs = obs + noise
+        return noisy_obs
+
+
 # Define the dynamics model
 class DynamicsModel(nn.Module):
     def __init__(self, state_dim, action_dim):
@@ -65,7 +86,7 @@ class PolicyNetwork(nn.Module):
 
 # Define the model-based agent
 class ModelBasedAgent:
-    def __init__(self, env, dynamics_lr=0.001, policy_lr=0.0003, gamma=0.99, clip_param=0.2, ppo_epochs=10, batch_size=64):
+    def __init__(self, env, dynamics_lr=0.001, policy_lr=0.00001, gamma=0.99, clip_param=0.2, ppo_epochs=10, batch_size=64):
         self.env = env
         self.state_dim = env.observation_space.shape[0]
         self.action_dim = env.action_space.n
@@ -179,6 +200,9 @@ class ModelBasedAgent:
                 action = self.select_action(state)
                 next_state, reward, done, _, _ = self.env.step(action)
 
+                # Custom reward function - reward reshaping 
+                reward = self.reward_function(next_state)
+
                 states.append(state)
                 actions.append(action)
                 rewards.append(reward)
@@ -201,7 +225,7 @@ class ModelBasedAgent:
 
             if total_reward > highest_reward:
                 highest_reward = total_reward
-                model_filename = f"policy_model_highest_reward.pth"
+                model_filename = f"ppo_highest_2000.pth"
                 model_filepath = os.path.join(self.model_save_path, model_filename)
                 torch.save(self.policy_network.state_dict(), model_filepath)
                 print(f"New highest reward {highest_reward:.4f} found, model saved to {model_filepath}, Loss: {self.loss}")
@@ -209,6 +233,12 @@ class ModelBasedAgent:
             self.update_policy(states, actions, rewards, state_values, log_probs)
 
         self.rewards_per_episode = rewards_per_episode
+        
+        # Save the final model
+        final_model_filename = "ppo_final_2000.pth"
+        final_model_filepath = os.path.join(self.model_save_path, final_model_filename)
+        torch.save(self.policy_network.state_dict(), final_model_filepath)
+        print(f"Final model saved to {final_model_filepath}")
 
     def update_policy(self, states, actions, rewards, state_values, log_probs):
         discounted_rewards = []
@@ -247,10 +277,10 @@ class ModelBasedAgent:
 
     def reward_function(self, state):
         cart_position, cart_velocity, pole_angle, pole_velocity = state
-        reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209)
+        reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) 
         return reward
 
-    def plot_loss(self):
+    def plot_loss(self, save_path='dynamics_training_loss.png'):
         plt.figure(figsize=(10, 6))
         plt.plot(self.epochs, self.losses, label='Training Loss')
         plt.xlabel('Epochs')
@@ -258,9 +288,11 @@ class ModelBasedAgent:
         plt.title('Dynamics Model Training Loss')
         plt.legend()
         plt.grid(True)
-        plt.show()
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Training loss plot saved to {save_path}")
 
-    def plot_rewards(self):
+    def plot_rewards(self, save_path='ppo_rewards_per_episode_2000.png'):
         plt.figure(figsize=(10, 6))
         plt.plot(range(len(self.rewards_per_episode)), self.rewards_per_episode, label='Rewards per Episode')
         plt.xlabel('Episodes')
@@ -268,12 +300,53 @@ class ModelBasedAgent:
         plt.title('Rewards per Episode')
         plt.legend()
         plt.grid(True)
-        plt.show()
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Rewards per episode plot saved to {save_path}")
 
     def load_model(self, filepath):
         self.policy_network.load_state_dict(torch.load(filepath, map_location=self.device))
         self.policy_network.eval()
         print(f"Loaded model from {filepath}")
+    
+    def test_policy(agent, env_name='CartPole-v1', testing_episodes=10):
+        # Create environment for testing
+        env = gym.make(env_name, render_mode=None)
+        env = NoisyObservationWrapper(env, noise_std=0.1)
+        test_rewards = []  # List to store rewards for each test episode
+        success_num = 0
+
+        for episode in range(testing_episodes):
+            state, _ = env.reset()
+            done = False
+            total_reward = 0
+            step = 0
+            while not done:
+                action = agent.select_action(state)
+                state, reward, done, _, _ = env.step(action)
+
+                reward = agent.reward_function(state)
+
+                total_reward += reward
+                step += 1
+                if step > 1000:
+                    print("Success")
+                    success_num += 1
+                    break
+            test_rewards.append(total_reward)
+            print(f"Test Episode {episode + 1}: Total Reward: {total_reward}")
+
+        print("The success rate is: ", (success_num / testing_episodes) * 100, "%")    
+        
+        # Plot the test rewards
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, len(test_rewards) + 1), test_rewards, marker='o', label='Test Rewards')
+        plt.xlabel('Test Episode')
+        plt.ylabel('Total Reward')
+        plt.title('Test Rewards per Episode')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Model-Based RL with PPO')
@@ -281,46 +354,29 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     env = gym.make('CartPole-v1')
+    env = NoisyObservationWrapper(env, noise_std=0.2)
     agent = ModelBasedAgent(env)
 
     if args.load:
         agent.load_model(args.load)
 
-    # Collect initial data
-    agent.collect_data()
+        agent.test_policy()
+    else:
+        # Collect initial data
+        agent.collect_data()
 
-    # Train dynamics model
-    agent.train_dynamics_model()
+        # Train dynamics model
+        agent.train_dynamics_model()
 
-    # Plot the training loss
-    agent.plot_loss()
+        # Plot the training loss
+        agent.plot_loss()
 
-    # Train policy
-    agent.train_policy()
+        # Train policy
+        agent.train_policy()
 
-    # Plot the rewards
-    agent.plot_rewards()
+        # Plot the rewards
+        agent.plot_rewards()
 
-    # Test policy
-    test_rewards = []  # List to store rewards for each test episode
-    env = gym.make('CartPole-v1', render_mode='human')
-    for episode in range(10):
-        state, _ = env.reset()
-        done = False
-        total_reward = 0
-        while not done:
-            action = agent.select_action(state)
-            state, reward, done, _, _ = env.step(action)
-            total_reward += reward
-        test_rewards.append(total_reward)
-        print(f"Test Episode {episode + 1}: Total Reward: {total_reward}")
-
-    # Plot the test rewards
-    plt.figure(figsize=(10, 6))
-    plt.plot(range(1, len(test_rewards) + 1), test_rewards, marker='o', label='Test Rewards')
-    plt.xlabel('Test Episode')
-    plt.ylabel('Total Reward')
-    plt.title('Test Rewards per Episode')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+        # Test policy
+        agent.test_policy()
+ 

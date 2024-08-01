@@ -197,8 +197,11 @@ class DQNAgent:
 
 
 
-    def test(self, model_filename, episodes=10, disturbance_step=100, disturbance_magnitude=1.0):
+    def test(self, model_filename, episodes=100, disturbance_step=100, disturbance_magnitude=1.0):
         self.load_model(model_filename)
+        rewards = []
+        total_success = 0
+
         for episode in range(episodes):
             state, info = self.env.reset()
             total_reward = 0
@@ -206,22 +209,18 @@ class DQNAgent:
             step = 0
 
             while not done:
-                self.env.render()
+                # self.env.render()  # Uncomment if you want to render the environment
                 state = torch.FloatTensor(state).to(self.device)
                 with torch.no_grad():
                     action = np.argmax(self.model(state).cpu().data.numpy())
                 next_state, reward, done, _, _ = self.env.step(action)
-                
-                # Apply disturbance at the specific time step
-                if step == disturbance_step:
-                    next_state[3] += disturbance_magnitude  # Apply disturbance to pole angular velocity
 
                 # Custom reward function
-                cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
-                
-                if done and step < 500:
-                    reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
+                # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
+                # reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+
+                # if done and step < 500:
+                #     reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
 
                 state = next_state
                 total_reward += reward
@@ -229,8 +228,26 @@ class DQNAgent:
                 if step >= 500:
                     done = True
                     print("SUCCESS!")
+
+            rewards.append(total_reward)
+            if total_reward >= self.env.spec.reward_threshold:
+                total_success += 1
             
-            print(f"Test Episode: {episode}, Total reward: {total_reward}") 
+            print(f"Test Episode: {episode}, Total reward: {total_reward}")
+
+        accuracy = (total_success / episodes) * 100
+        print(f'Accuracy over {episodes} episodes: {accuracy:.2f}%')
+
+        def plot_rewards(episodes, rewards):
+            plt.plot(episodes, rewards)
+            plt.xlabel('Episode')
+            plt.ylabel('Total Reward')
+            plt.title('Episodes vs Total Rewards')
+            plt.show()
+
+
+        # Plot episodes vs rewards
+        plot_rewards(list(range(1, episodes + 1)), rewards)
 
 
     def save_model(self, filename):
