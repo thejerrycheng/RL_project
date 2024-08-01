@@ -10,6 +10,7 @@ import argparse
 import matplotlib.pyplot as plt
 import math
 import csv
+import os
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.3):
@@ -141,7 +142,11 @@ class DQNAgent:
     def train(self, postfix, episodes):
         rewards = []
         best_total_reward = -float('inf')
-
+        
+        # Create directory if it doesn't exist
+        model_dir = 'dqn_models'
+        os.makedirs(model_dir, exist_ok=True)
+        
         for episode in range(episodes):
             state, info = self.env.reset()
             total_reward = 0
@@ -164,7 +169,7 @@ class DQNAgent:
 
             if total_reward > best_total_reward:
                 best_total_reward = total_reward
-                self.save_model(f"highest_reward_{postfix}.pth")
+                self.save_model(os.path.join(model_dir, f"dqn_highest_reward_{postfix}.pth"))
                 print(f"New best total reward: {best_total_reward} - Model saved")
 
             if episode % self.update_rate == 0:
@@ -186,6 +191,8 @@ class DQNAgent:
                 writer.writerow([i + 1, reward])
         print(f"Rewards saved to {rewards_csv_filepath}")
 
+        self.save_model(os.path.join(model_dir, f"dqn_final_{postfix}.pth"))
+
         # Save plot
         plt.plot(rewards)
         plt.xlabel('Episode')
@@ -194,7 +201,7 @@ class DQNAgent:
         plt.savefig(f"dqn_rewards_vs_episodes_{postfix}.png")
         plt.show()
 
-    def test(self, model_filename, episodes=100):
+    def test(self, model_filename,postfix, episodes=100):
         self.load_model(model_filename)
         rewards = []
         total_success = 0
@@ -285,6 +292,6 @@ if __name__ == "__main__":
         agent.load_model(args.load)
 
     if args.test:
-        agent.test(model_filename=args.load, episodes=hyperparams.test_episodes)
+        agent.test(model_filename=args.load, postfix=args.save, episodes=hyperparams.test_episodes)
     else:
         agent.train(postfix=args.save, episodes=hyperparams.episodes)
