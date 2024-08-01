@@ -9,7 +9,8 @@ from collections import deque
 import random
 import matplotlib.pyplot as plt
 import math
-
+import csv
+import datetime
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
@@ -84,25 +85,42 @@ class PolicyNetwork(nn.Module):
         state_value = self.value_head(x)
         return action_probs, state_value
 
+# Define the hyperparameters class
+class HyperParameters:
+    def __init__(self, dynamics_lr=0.001, policy_lr=0.00001, gamma=0.99, clip_param=0.2, ppo_epochs=10, batch_size=64, 
+                 noise_std=0.2, num_episodes=5000, training_iterations=1000, testing_iterations=10, postfix='default'):
+        self.dynamics_lr = dynamics_lr
+        self.policy_lr = policy_lr
+        self.gamma = gamma
+        self.clip_param = clip_param
+        self.ppo_epochs = ppo_epochs
+        self.batch_size = batch_size
+        self.noise_std = noise_std
+        self.num_episodes = num_episodes
+        self.training_iterations = training_iterations
+        self.testing_iterations = testing_iterations
+        self.postfix = postfix
+
 # Define the model-based agent
 class ModelBasedAgent:
-    def __init__(self, env, dynamics_lr=0.001, policy_lr=0.00001, gamma=0.99, clip_param=0.2, ppo_epochs=10, batch_size=64):
+    def __init__(self, env, hyperparams):
         self.env = env
         self.state_dim = env.observation_space.shape[0]
         self.action_dim = env.action_space.n
+        self.hyperparams = hyperparams
 
         # Define the device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.dynamics_model = DynamicsModel(self.state_dim, self.action_dim).to(self.device)
         self.policy_network = PolicyNetwork(self.state_dim, self.action_dim).to(self.device)
-        self.dynamics_optimizer = optim.Adam(self.dynamics_model.parameters(), lr=dynamics_lr)
-        self.policy_optimizer = optim.Adam(self.policy_network.parameters(), lr=policy_lr)
-        self.gamma = gamma
+        self.dynamics_optimizer = optim.Adam(self.dynamics_model.parameters(), lr=self.hyperparams.dynamics_lr)
+        self.policy_optimizer = optim.Adam(self.policy_network.parameters(), lr=self.hyperparams.policy_lr)
+        self.gamma = self.hyperparams.gamma
         self.loss = 0
-        self.clip_param = clip_param
-        self.ppo_epochs = ppo_epochs
-        self.batch_size = batch_size
+        self.clip_param = self.hyperparams.clip_param
+        self.ppo_epochs = self.hyperparams.ppo_epochs
+        self.batch_size = self.hyperparams.batch_size
         self.memory = deque(maxlen=10000)
 
         # Create directory for saving models
@@ -168,7 +186,7 @@ class ModelBasedAgent:
             # Save the model at specified intervals or when a new minimum loss is achieved
             if (epoch + 1) % save_interval == 0 or total_loss.item() < min_loss:
                 min_loss = total_loss.item()
-                model_filename = f"dynamics_model.pth"
+                model_filename = f"dynamics_model_{self.hyperparams.postfix}.pth"
                 model_filepath = os.path.join(self.dynamics_model_save_path, model_filename)
                 torch.save(self.dynamics_model.state_dict(), model_filepath)
                 print(f"Model saved to {model_filepath}")
@@ -225,7 +243,7 @@ class ModelBasedAgent:
 
             if total_reward > highest_reward:
                 highest_reward = total_reward
-                model_filename = f"ppo_highest_2000.pth"
+                model_filename = f"ppo_highest_{self.hyperparams.postfix}.pth"
                 model_filepath = os.path.join(self.model_save_path, model_filename)
                 torch.save(self.policy_network.state_dict(), model_filepath)
                 print(f"New highest reward {highest_reward:.4f} found, model saved to {model_filepath}, Loss: {self.loss}")
@@ -233,9 +251,18 @@ class ModelBasedAgent:
             self.update_policy(states, actions, rewards, state_values, log_probs)
 
         self.rewards_per_episode = rewards_per_episode
+
+        # Save the rewards to a CSV file
+        rewards_csv_filepath = f'rewards_{self.hyperparams.postfix}.csv'
+        with open(rewards_csv_filepath, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Episode', 'Total Reward'])
+            for i, reward in enumerate(rewards_per_episode):
+                writer.writerow([i + 1, reward])
+        print(f"Rewards saved to {rewards_csv_filepath}")
         
         # Save the final model
-        final_model_filename = "ppo_final_2000.pth"
+        final_model_filename = f"ppo_final_{self.hyperparams.postfix}.pth"
         final_model_filepath = os.path.join(self.model_save_path, final_model_filename)
         torch.save(self.policy_network.state_dict(), final_model_filepath)
         print(f"Final model saved to {final_model_filepath}")
@@ -280,7 +307,9 @@ class ModelBasedAgent:
         reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) 
         return reward
 
-    def plot_loss(self, save_path='dynamics_training_loss.png'):
+    def plot_loss(self, save_path=None):
+        if save_path is None:
+            save_path = f'dynamics_training_loss_{self.hyperparams.postfix}.png'
         plt.figure(figsize=(10, 6))
         plt.plot(self.epochs, self.losses, label='Training Loss')
         plt.xlabel('Epochs')
@@ -292,7 +321,9 @@ class ModelBasedAgent:
         plt.close()
         print(f"Training loss plot saved to {save_path}")
 
-    def plot_rewards(self, save_path='ppo_rewards_per_episode_2000.png'):
+    def plot_rewards(self, save_path=None):
+        if save_path is None:
+            save_path = f'ppo_rewards_per_episode_{self.hyperparams.postfix}.png'
         plt.figure(figsize=(10, 6))
         plt.plot(range(len(self.rewards_per_episode)), self.rewards_per_episode, label='Rewards per Episode')
         plt.xlabel('Episodes')
@@ -309,23 +340,23 @@ class ModelBasedAgent:
         self.policy_network.eval()
         print(f"Loaded model from {filepath}")
     
-    def test_policy(agent, env_name='CartPole-v1', testing_episodes=10):
+    def test_policy(self, env_name='CartPole-v1'):
         # Create environment for testing
         env = gym.make(env_name, render_mode=None)
-        env = NoisyObservationWrapper(env, noise_std=0.1)
+        env = NoisyObservationWrapper(env, noise_std=self.hyperparams.noise_std)
         test_rewards = []  # List to store rewards for each test episode
         success_num = 0
 
-        for episode in range(testing_episodes):
+        for episode in range(self.hyperparams.testing_iterations):
             state, _ = env.reset()
             done = False
             total_reward = 0
             step = 0
             while not done:
-                action = agent.select_action(state)
+                action = self.select_action(state)
                 state, reward, done, _, _ = env.step(action)
 
-                reward = agent.reward_function(state)
+                reward = self.reward_function(state)
 
                 total_reward += reward
                 step += 1
@@ -336,7 +367,7 @@ class ModelBasedAgent:
             test_rewards.append(total_reward)
             print(f"Test Episode {episode + 1}: Total Reward: {total_reward}")
 
-        print("The success rate is: ", (success_num / testing_episodes) * 100, "%")    
+        print("The success rate is: ", (success_num / self.hyperparams.testing_iterations) * 100, "%")    
         
         # Plot the test rewards
         plt.figure(figsize=(10, 6))
@@ -351,32 +382,55 @@ class ModelBasedAgent:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Model-Based RL with PPO')
     parser.add_argument('--load', type=str, help='Path to the pre-trained policy model')
+    parser.add_argument('--postfix', type=str, default=datetime.datetime.now().strftime("%Y%m%d%H%M%S"), help='Post-fix for the naming of saved files')
+    parser.add_argument('--dynamics_lr', type=float, default=0.001, help='Learning rate for dynamics model')
+    parser.add_argument('--policy_lr', type=float, default=0.00001, help='Learning rate for policy model')
+    parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
+    parser.add_argument('--clip_param', type=float, default=0.2, help='Clip parameter for PPO')
+    parser.add_argument('--ppo_epochs', type=int, default=10, help='Number of PPO epochs')
+    parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
+    parser.add_argument('--noise_std', type=float, default=0.1, help='Noise standard deviation')
+    parser.add_argument('--num_episodes', type=int, default=5000, help='Number of training episodes')
+    parser.add_argument('--training_iterations', type=int, default=1000, help='Number of training iterations')
+    parser.add_argument('--testing_iterations', type=int, default=10, help='Number of testing iterations')
     args = parser.parse_args()
 
+    hyperparams = HyperParameters(
+        dynamics_lr=args.dynamics_lr,
+        policy_lr=args.policy_lr,
+        gamma=args.gamma,
+        clip_param=args.clip_param,
+        ppo_epochs=args.ppo_epochs,
+        batch_size=args.batch_size,
+        noise_std=args.noise_std,
+        num_episodes=args.num_episodes,
+        training_iterations=args.training_iterations,
+        testing_iterations=args.testing_iterations,
+        postfix=args.postfix
+    )
+
     env = gym.make('CartPole-v1')
-    env = NoisyObservationWrapper(env, noise_std=0.2)
-    agent = ModelBasedAgent(env)
+    env = NoisyObservationWrapper(env, noise_std=hyperparams.noise_std)
+    agent = ModelBasedAgent(env, hyperparams)
 
     if args.load:
         agent.load_model(args.load)
-
         agent.test_policy()
     else:
         # Collect initial data
         agent.collect_data()
 
         # Train dynamics model
-        agent.train_dynamics_model()
+        agent.train_dynamics_model(epochs=hyperparams.training_iterations)
 
         # Plot the training loss
         agent.plot_loss()
 
         # Train policy
-        agent.train_policy()
+        agent.train_policy(num_episodes=hyperparams.num_episodes)
 
         # Plot the rewards
         agent.plot_rewards()
 
         # Test policy
         agent.test_policy()
- 

@@ -1,5 +1,3 @@
-# dqn_cartpole.py
-
 import gymnasium as gym
 import numpy as np
 import torch
@@ -11,10 +9,10 @@ import datetime
 import argparse
 import matplotlib.pyplot as plt
 import math
-import json
+import csv
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
-    def __init__(self, env, noise_std=0.1):
+    def __init__(self, env, noise_std=0.3):
         super(NoisyObservationWrapper, self).__init__(env)
         self.noise_std = noise_std
         self.observation_space = env.observation_space
@@ -50,50 +48,45 @@ class DQN(nn.Module):
         x = self.fc5(x)
         return x
 
-
-def reward_fun1(self, cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
-        # Reward for staying near the center
-        reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
-        
-        if done and total_reward < 500:
-            reward = -0.1 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
-        return reward
-    
-def reward_fun2(self, cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
-    if abs(cart_position) < 0.5 and abs(pole_angle) < 0.05:
-        reward = 1.0
-    else:
-        # Penalize deviations from the center
-        reward = - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209)
-
-    if done and total_reward < 500:
-        reward = -1.0  # Penalize if the episode ends prematurely
-    return reward
-    
-
-# Add more reward functions for experiments 
-
-class DQNAgent:
-    def __init__(self, env, update_rate = 10, gamma=0.9, epsilon=0.99, epsilon_min=0.01, epsilon_decay=0.9995, lr=0.0001, batch_size=64, memory_size=10000, reward_fun='reward_fun1'):
-        self.env = env
+# Define the hyperparameters class
+class HyperParameters:
+    def __init__(self, update_rate=10, gamma=0.9, epsilon=0.99, epsilon_min=0.01, epsilon_decay=0.9995, 
+                 lr=0.0001, batch_size=64, memory_size=10000, reward_fun='reward_fun1', 
+                 episodes=100000, noise_std=0.1, test_episodes=100):
+        self.update_rate = update_rate
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
         self.lr = lr
-        self.update_rate = update_rate
         self.batch_size = batch_size
-        self.memory = deque(maxlen=memory_size)
+        self.memory_size = memory_size
+        self.reward_fun = reward_fun
+        self.episodes = episodes
+        self.noise_std = noise_std
+        self.test_episodes = test_episodes
+
+class DQNAgent:
+    def __init__(self, hyperparams):
+        self.env = NoisyObservationWrapper(gym.make('CartPole-v1'), noise_std=hyperparams.noise_std)
+        self.gamma = hyperparams.gamma
+        self.epsilon = hyperparams.epsilon
+        self.epsilon_min = hyperparams.epsilon_min
+        self.epsilon_decay = hyperparams.epsilon_decay
+        self.lr = hyperparams.lr
+        self.update_rate = hyperparams.update_rate
+        self.batch_size = hyperparams.batch_size
+        self.memory = deque(maxlen=hyperparams.memory_size)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.model = DQN(env.observation_space.shape[0], env.action_space.n).to(self.device)
-        self.target_model = DQN(env.observation_space.shape[0], env.action_space.n).to(self.device)
+        self.model = DQN(self.env.observation_space.shape[0], self.env.action_space.n).to(self.device)
+        self.target_model = DQN(self.env.observation_space.shape[0], self.env.action_space.n).to(self.device)
         self.update_target_model()
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.loss_fn = nn.MSELoss()
 
-        self.reward_fun = globals()[reward_fun]
+        self.reward_fun = getattr(self, hyperparams.reward_fun)
 
     def update_target_model(self):
         self.target_model.load_state_dict(self.model.state_dict())
@@ -130,14 +123,23 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
+    def reward_fun1(self, cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
+        reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+        if done and total_reward < 500:
+            reward = -0.1 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+        return reward
 
-    def train(self, episodes=100000, save_filename=None):
-        if save_filename is None:
-            current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_filename = f'dqn_{current_time}.pth'
+    def reward_fun2(self, cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
+        if abs(cart_position) < 0.5 and abs(pole_angle) < 0.05:
+            reward = 1.0
+        else:
+            reward = - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209)
+        if done and total_reward < 500:
+            reward = -1.0
+        return reward
 
+    def train(self, save_filename, episodes):
         rewards = []
-        recent_rewards = deque(maxlen=100)
         best_total_reward = -float('inf')
 
         for episode in range(episodes):
@@ -149,14 +151,8 @@ class DQNAgent:
             while not done:
                 action = self.act(state)
                 next_state, reward, done, _, _ = self.env.step(action)
-                
-                #Custom reward function
-                # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                
-                # reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0) # Reward for staying near the center
-        
-                # if done and total_reward < 500:
-                #     reward = -0.1 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
+
+                # reward = self.reward_fun(*next_state, total_reward, done)
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
@@ -164,15 +160,7 @@ class DQNAgent:
                 step += 1
                 self.replay()
 
-                # if step > 500:
-                #     done = True
-                #     print("SUCCESS!")
-                # else:
-                #     done = False
-                #     print("FAILURE!")
-
             rewards.append(total_reward)
-            recent_rewards.append(total_reward)
 
             if total_reward > best_total_reward:
                 best_total_reward = total_reward
@@ -181,11 +169,18 @@ class DQNAgent:
 
             if episode % self.update_rate == 0:
                 self.update_target_model()
-                print(f"Episode: {episode}, Average reward: {np.mean(rewards[-10:])}, Epsilon: {self.epsilon}, Step: {step}") # Print average reward of last 10 episodes, epsilon, and step
-            
+                print(f"Episode: {episode}, Average reward: {np.mean(rewards[-10:])}, Epsilon: {self.epsilon}, Step: {step}")
+
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-            
+        # Save rewards to CSV
+        rewards_csv_filepath = save_filename.replace('.pth', '_rewards.csv')
+        with open(rewards_csv_filepath, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Episode', 'Total Reward'])
+            for i, reward in enumerate(rewards):
+                writer.writerow([i + 1, reward])
+        print(f"Rewards saved to {rewards_csv_filepath}")
 
         # Save plot
         plt.plot(rewards)
@@ -195,9 +190,7 @@ class DQNAgent:
         plt.savefig(save_filename.replace('.pth', '_plot.png'))
         plt.show()
 
-
-
-    def test(self, model_filename, episodes=100, disturbance_step=100, disturbance_magnitude=1.0):
+    def test(self, model_filename, episodes=100):
         self.load_model(model_filename)
         rewards = []
         total_success = 0
@@ -209,24 +202,17 @@ class DQNAgent:
             step = 0
 
             while not done:
-                # self.env.render()  # Uncomment if you want to render the environment
                 state = torch.FloatTensor(state).to(self.device)
                 with torch.no_grad():
                     action = np.argmax(self.model(state).cpu().data.numpy())
                 next_state, reward, done, _, _ = self.env.step(action)
 
-                # Custom reward function
-                # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                # reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
-
-                # if done and step < 500:
-                #     reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
+                # reward = self.reward_fun(*next_state, total_reward, done)
 
                 state = next_state
                 total_reward += reward
                 step += 1
-                if step >= 500:
-                    done = True
+                if step == 500:
                     print("SUCCESS!")
 
             rewards.append(total_reward)
@@ -238,17 +224,12 @@ class DQNAgent:
         accuracy = (total_success / episodes) * 100
         print(f'Accuracy over {episodes} episodes: {accuracy:.2f}%')
 
-        def plot_rewards(episodes, rewards):
-            plt.plot(episodes, rewards)
-            plt.xlabel('Episode')
-            plt.ylabel('Total Reward')
-            plt.title('Episodes vs Total Rewards')
-            plt.show()
-
-
         # Plot episodes vs rewards
-        plot_rewards(list(range(1, episodes + 1)), rewards)
-
+        plt.plot(range(1, episodes + 1), rewards)
+        plt.xlabel('Episode')
+        plt.ylabel('Total Reward')
+        plt.title('Episodes vs Total Rewards')
+        plt.show()
 
     def save_model(self, filename):
         torch.save(self.model.state_dict(), filename)
@@ -262,24 +243,43 @@ class DQNAgent:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='DQN for CartPole with Sensor Noise')
     parser.add_argument('--load', type=str, help='Model filename to load', default=None)
-    parser.add_argument('--save', type=str, help='Model filename to save', default=None)
+    parser.add_argument('--save', type=str, default=datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + '.pth', help='Model filename to save')
     parser.add_argument('--reward', type=str, help='Reward function to use', default='reward_fun1')
+    parser.add_argument('--test', action='store_true', help='Test the model')
+    parser.add_argument('--episodes', type=int, help='Number of episodes for training', default=50000)
+    parser.add_argument('--test_episodes', type=int, help='Number of episodes for testing', default=100)
+    parser.add_argument('--update_rate', type=int, help='Update rate for target network', default=10)
+    parser.add_argument('--gamma', type=float, help='Discount factor', default=0.9)
+    parser.add_argument('--epsilon', type=float, help='Initial epsilon for exploration', default=0.99)
+    parser.add_argument('--epsilon_min', type=float, help='Minimum epsilon for exploration', default=0.01)
+    parser.add_argument('--epsilon_decay', type=float, help='Epsilon decay rate', default=0.9995)
+    parser.add_argument('--lr', type=float, help='Learning rate', default=0.0001)
+    parser.add_argument('--batch_size', type=int, help='Batch size for replay', default=64)
+    parser.add_argument('--memory_size', type=int, help='Replay memory size', default=10000)
+    parser.add_argument('--noise_std', type=float, help='Standard deviation of noise', default=0.1)
     args = parser.parse_args()
 
-    save_filename = args.save
-    if not save_filename:
-        current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_filename = f'dqn_{current_time}.pth'
+    hyperparams = HyperParameters(
+        update_rate=args.update_rate,
+        gamma=args.gamma,
+        epsilon=args.epsilon,
+        epsilon_min=args.epsilon_min,
+        epsilon_decay=args.epsilon_decay,
+        lr=args.lr,
+        batch_size=args.batch_size,
+        memory_size=args.memory_size,
+        reward_fun=args.reward,
+        episodes=args.episodes,
+        noise_std=args.noise_std,
+        test_episodes=args.test_episodes
+    )
 
-    train_env = gym.make('CartPole-v1')
-    noisy_train_env = NoisyObservationWrapper(train_env, noise_std=0.1)
-    agent = DQNAgent(noisy_train_env, reward_fun=args.reward)
+    agent = DQNAgent(hyperparams)
+
     if args.load:
         agent.load_model(args.load)
-    agent.train(save_filename=save_filename)
 
-    test_env = gym.make('CartPole-v1', render_mode='human')
-    noisy_test_env = NoisyObservationWrapper(test_env, noise_std=0.1)
-    agent.env = noisy_test_env
-    agent.test(model_filename=save_filename, episodes=10)
-    test_env.close()
+    if args.test:
+        agent.test(model_filename=args.load, episodes=hyperparams.test_episodes)
+    else:
+        agent.train(save_filename=args.save, episodes=hyperparams.episodes)
