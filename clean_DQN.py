@@ -21,7 +21,7 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         self.obs_ranges = [
             2,  # cart position noise range is -2 to 2
             0.5,  # cart velocity noise range is -0.5 to 0.5
-            math.radians(2),  # pole angle noise range is -20 degrees to 20 degrees
+            math.radians(2),  # pole angle noise range is -2 degrees to 2 degrees
             math.radians(0.5)  # pole angular velocity noise range is -0.5 degrees/s to 0.5 degrees/s
         ]
 
@@ -138,7 +138,7 @@ class DQNAgent:
             reward = -1.0
         return reward
 
-    def train(self, save_filename, episodes):
+    def train(self, postfix, episodes):
         rewards = []
         best_total_reward = -float('inf')
 
@@ -164,17 +164,21 @@ class DQNAgent:
 
             if total_reward > best_total_reward:
                 best_total_reward = total_reward
-                self.save_model(save_filename)
+                self.save_model(f"highest_reward_{postfix}.pth")
                 print(f"New best total reward: {best_total_reward} - Model saved")
 
             if episode % self.update_rate == 0:
                 self.update_target_model()
                 print(f"Episode: {episode}, Average reward: {np.mean(rewards[-10:])}, Epsilon: {self.epsilon}, Step: {step}")
 
+            if step > 500: # If the episode is successful, then stop this episode's training 
+                print("SUCCESS!")
+                break
+
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
         # Save rewards to CSV
-        rewards_csv_filepath = save_filename.replace('.pth', '_rewards.csv')
+        rewards_csv_filepath = f"rewards_{postfix}.csv"
         with open(rewards_csv_filepath, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Episode', 'Total Reward'])
@@ -187,7 +191,7 @@ class DQNAgent:
         plt.xlabel('Episode')
         plt.ylabel('Total Reward')
         plt.title('Episode vs. Total Reward')
-        plt.savefig(save_filename.replace('.pth', '_plot.png'))
+        plt.savefig(f"dqn_rewards_vs_episodes_{postfix}.png")
         plt.show()
 
     def test(self, model_filename, episodes=100):
@@ -229,6 +233,7 @@ class DQNAgent:
         plt.xlabel('Episode')
         plt.ylabel('Total Reward')
         plt.title('Episodes vs Total Rewards')
+        plt.savefig(f"dqn_rewards_vs_episodes_{postfix}_test.png")
         plt.show()
 
     def save_model(self, filename):
@@ -243,7 +248,7 @@ class DQNAgent:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='DQN for CartPole with Sensor Noise')
     parser.add_argument('--load', type=str, help='Model filename to load', default=None)
-    parser.add_argument('--save', type=str, default=datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + '.pth', help='Model filename to save')
+    parser.add_argument('--save', type=str, default=datetime.datetime.now().strftime("%Y%m%d_%H%M%S"), help='Postfix for saved items')
     parser.add_argument('--reward', type=str, help='Reward function to use', default='reward_fun1')
     parser.add_argument('--test', action='store_true', help='Test the model')
     parser.add_argument('--episodes', type=int, help='Number of episodes for training', default=50000)
@@ -282,4 +287,4 @@ if __name__ == "__main__":
     if args.test:
         agent.test(model_filename=args.load, episodes=hyperparams.test_episodes)
     else:
-        agent.train(save_filename=args.save, episodes=hyperparams.episodes)
+        agent.train(postfix=args.save, episodes=hyperparams.episodes)
