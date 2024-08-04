@@ -1,5 +1,3 @@
-# dqn_cartpole.py
-
 import gymnasium as gym
 import numpy as np
 import torch
@@ -11,7 +9,7 @@ import datetime
 import argparse
 import matplotlib.pyplot as plt
 import math
-import json
+import csv
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
@@ -21,9 +19,9 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         
         # Define the range for each observation component
         self.obs_ranges = [
-            2,  # cart position noise range is -2 to 2
+            2.4,  # cart position noise range is -2 to 2
             0.5,  # cart velocity noise range is -0.5 to 0.5
-            math.radians(2),  # pole angle noise range is -20 degrees to 20 degrees
+            math.radians(12),  # pole angle noise range is -20 degrees to 20 degrees
             math.radians(0.5)  # pole angular velocity noise range is -0.5 degrees/s to 0.5 degrees/s
         ]
 
@@ -152,12 +150,6 @@ class DQNAgent:
                 # Custom reward function
                 cart_position, cart_velocity, pole_angle, pole_velocity = next_state
                 # reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
-                # Custom reward function
-                cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
-                
-                if done and total_reward < 500:
-                    reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
@@ -165,44 +157,41 @@ class DQNAgent:
                 step += 1
                 self.replay()
 
-                if step > 500:
-                    done = True
-                    print("SUCCESS!")
-                else:
-                    done = False
-                    print("FAILURE!")
-
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
 
             if total_reward > best_total_reward:
                 best_total_reward = total_reward
-                self.save_model(save_filename)
+                self.save_model('highest_' + save_filename + '.pth')
                 print(f"New best total reward: {best_total_reward} - Model saved")
 
             if episode % 10 == 0:
                 self.update_target_model()
-
-            if episode % 10 == 0:
                 print(f"Episode: {episode}, Average reward: {np.mean(rewards[-10:])}")
 
-            if np.mean(recent_rewards) >= 490:
-                print(f"Environment solved in {episode} episodes!")
-                break
+            # if np.mean(recent_rewards) >= 490:
+            #     print(f"Environment solved in {episode} episodes!")
+            #     break
 
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-        # Save rewards to file
-        rewards_filename = save_filename.replace('.pth', '_rewards.json')
-        with open(rewards_filename, 'w') as f:
-            json.dump(rewards, f)
+        self.save_model('final_' + save_filename + '.pth')
+        print("The training is complete! Model saved to {save_filename}")
+
+        # Save rewards to CSV file
+        rewards_filename = f'rewards_{save_filename}.csv'
+        with open(rewards_filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Episode', 'Total Reward'])
+            for i, reward in enumerate(rewards):
+                writer.writerow([i, reward])
 
         # Save plot
         plt.plot(rewards)
         plt.xlabel('Episode')
         plt.ylabel('Total Reward')
         plt.title('Episode vs. Total Reward')
-        plt.savefig(save_filename.replace('.pth', '_plot.png'))
+        plt.savefig(save_filename + '_rewards_plot.png')
         plt.show()
 
 
@@ -228,10 +217,7 @@ class DQNAgent:
 
                 # Custom reward function
                 cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
-                
-                if done and step < 500:
-                    reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)  # Penalize if the episode ends prematurely
+                # reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
 
                 state = next_state
                 total_reward += reward
@@ -257,6 +243,8 @@ if __name__ == "__main__":
     parser.add_argument('--load', type=str, help='Model filename to load', default=None)
     parser.add_argument('--save', type=str, help='Model filename to save', default=None)
     parser.add_argument('--reward', type=str, help='Reward function to use', default='reward_fun1')
+    parser.add_argument('--noise_std', type=float, help='Noise standard deviation for observations', default=0.1)
+    parser.add_argument('--episodes', type=int, help='Number of training episodes', default=10000)
     args = parser.parse_args()
 
     save_filename = args.save
@@ -265,14 +253,14 @@ if __name__ == "__main__":
         save_filename = f'dqn_{current_time}.pth'
 
     train_env = gym.make('CartPole-v1')
-    noisy_train_env = NoisyObservationWrapper(train_env, noise_std=0.1)
+    noisy_train_env = NoisyObservationWrapper(train_env, noise_std=args.noise_std)
     agent = DQNAgent(noisy_train_env, reward_fun=args.reward)
     if args.load:
         agent.load_model(args.load)
-    agent.train(save_filename=save_filename)
+    agent.train(episodes=args.episodes, save_filename=save_filename)
 
     test_env = gym.make('CartPole-v1', render_mode='human')
-    noisy_test_env = NoisyObservationWrapper(test_env, noise_std=0.1)
+    noisy_test_env = NoisyObservationWrapper(test_env, noise_std=args.noise_std)
     agent.env = noisy_test_env
     agent.test(model_filename=save_filename, episodes=10)
     test_env.close()

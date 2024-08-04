@@ -4,6 +4,7 @@ import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import argparse
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
@@ -13,9 +14,9 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         
         # Define the range for each observation component
         self.obs_ranges = [
-            2,  # cart position range is [-2.4, 2.4]
+            2.4,  # cart position range is [-2.4, 2.4]
             0.5,  # cart velocity range is approximated as [-50, 50]
-            math.radians(20),  # pole angle range is [-12 degrees, 12 degrees]
+            math.radians(12),  # pole angle range is [-12 degrees, 12 degrees]
             math.radians(0.5)  # pole angular velocity range is approximated as [-50 degrees/s, 50 degrees/s]
         ]
 
@@ -88,5 +89,8 @@ def plot_comparisons(cart_positions, noisy_cart_positions, pole_angles, noisy_po
 
 
 if __name__ == "__main__":
-    # You can change the noise_std to study its impact
-    setup_noisy_environment(noise_std=0.1)
+    parser = argparse.ArgumentParser(description="Set the noise standard deviation level for the environment.")
+    parser.add_argument('--noise_std', type=float, default=0.1, help='Standard deviation of the noise to be added to observations.')
+    args = parser.parse_args()
+
+    setup_noisy_environment(noise_std=args.noise_std)

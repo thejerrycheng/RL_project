@@ -112,7 +112,10 @@ class DQNAgent:
         dones = torch.FloatTensor(dones).to(self.device)
 
         q_values = self.model(states).gather(1, actions.unsqueeze(1)).squeeze(1)
-        next_q_values = self.target_model(next_states).max(1)[0]
+        
+        # Double DQN update
+        next_actions = self.model(next_states).argmax(1)
+        next_q_values = self.target_model(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)
         target_q_values = rewards + (self.gamma * next_q_values * (1 - dones))
 
         loss = self.loss_fn(q_values, target_q_values.detach())
@@ -140,7 +143,7 @@ class DQNAgent:
                 action = self.act(state)
                 next_state, reward, done, _, _ = self.env.step(action)
                 
-                # Custom reward function
+                # # Custom reward function
                 # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
                 # reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
 
@@ -199,8 +202,12 @@ class DQNAgent:
                 with torch.no_grad():
                     action = np.argmax(self.model(state).cpu().data.numpy())
                 next_state, reward, done, _, _ = self.env.step(action)
-            
-                # Custom reward function
+                
+                # Apply disturbance at the specific time step
+                # if step == disturbance_step:
+                #     next_state[3] += disturbance_magnitude  # Apply disturbance to pole angular velocity
+
+                # # Custom reward function
                 # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
                 # reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
 
