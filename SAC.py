@@ -30,6 +30,17 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         noisy_obs = obs + noise
         return noisy_obs
 
+class DiscreteToContinuousWrapper(gym.ActionWrapper):
+    def __init__(self, env):
+        super(DiscreteToContinuousWrapper, self).__init__(env)
+        self.action_space = gym.spaces.Box(
+            low=-1.0, high=1.0, shape=(env.action_space.n,), dtype=np.float32
+        )
+
+    def action(self, action):
+        action = np.argmax(action)
+        return action
+
 class Actor(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(Actor, self).__init__()
@@ -124,12 +135,14 @@ class SACAgent:
             state, info = self.env.reset()
             episode_reward = 0
             done = False
+            step = 0
             while not done:
                 action = self.act(state)
                 next_state, reward, done, _, _ = self.env.step(action)
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
                 episode_reward += reward
+                step += 1
                 if len(self.memory) > self.batch_size:
                     self.update()
 
@@ -141,8 +154,21 @@ class SACAgent:
                 print(f"New best total reward: {best_total_reward} - Model saved")
 
             if episode % 10 == 0:
-                print(f"Episode: {episode}, Reward: {episode_reward}")
+                print(f"Episode: {episode}, Reward: {episode_reward}, Steps: {step}")
 
+            if step >= 500:
+                print("SUCCESS!")
+                break
+
+        # Save rewards to CSV file
+        rewards_filename = save_filename.replace('.pth', '_rewards.csv')
+        with open(rewards_filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Episode', 'Total Reward'])
+            for i, reward in enumerate(rewards):
+                writer.writerow([i, reward])
+
+        # Plot rewards
         plt.plot(rewards)
         plt.xlabel('Episode')
         plt.ylabel('Reward')
@@ -215,6 +241,7 @@ class SACAgent:
             state, info = self.env.reset()
             episode_reward = 0
             done = False
+            step = 0
             while not done:
                 if args.render:
                     self.env.render()
@@ -222,6 +249,10 @@ class SACAgent:
                 next_state, reward, done, _, _ = self.env.step(action)
                 state = next_state
                 episode_reward += reward
+                step += 1
+                if step >= 500:
+                    print("SUCCESS!")
+                    break
             print(f"Test Episode: {episode}, Reward: {episode_reward}")
 
 if __name__ == "__main__":
@@ -232,11 +263,11 @@ if __name__ == "__main__":
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
     parser.add_argument('--tau', type=float, default=0.005, help='Soft update factor')
     parser.add_argument('--alpha', type=float, default=0.2, help='Entropy regularization coefficient')
-    parser.add_argument('--lr', type=float, default=0.0003, help='Learning rate')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for replay')
     parser.add_argument('--memory_size', type=int, default=100000, help='Replay memory size')
     parser.add_argument('--noise_std', type=float, default=0.1, help='Standard deviation of the noise')
-    parser.add_argument('--episodes', type=int, default=1000, help='Number of episodes for training')
+    parser.add_argument('--episodes', type=int, default=10000, help='Number of episodes for training')
     parser.add_argument('--test', action='store_true', help='Test the model')
     parser.add_argument('--render', action='store_true', help='Render the environment')
     args = parser.parse_args()
@@ -248,6 +279,7 @@ if __name__ == "__main__":
 
     def create_env(render_mode=None, noise_std=args.noise_std):
         env = gym.make('CartPole-v1', render_mode=render_mode)
+        env = DiscreteToContinuousWrapper(env)
         return NoisyObservationWrapper(env, noise_std=noise_std)
 
     if args.test:

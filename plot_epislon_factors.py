@@ -3,8 +3,8 @@ import numpy as np
 
 # Parameters
 initial_epsilon = 0.99
-num_episodes = 100000
-decay_factors = [0.999, 0.9999, 0.99993]
+num_episodes = 10000
+decay_factors = [0.999, 0.9995, 0.9999, 0.99999, 0.99]
 
 # Function to calculate epsilon decay
 def calculate_epsilon_decay(initial_epsilon, decay_factor, num_episodes):

@@ -153,6 +153,10 @@ class DQNAgent:
                 step += 1
                 self.replay()
 
+                if step >= 500:
+                    print("SUCCESS!")
+                    break   
+
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
 
@@ -175,6 +179,9 @@ class DQNAgent:
             writer.writerow(['Episode', 'Total Reward'])
             for i, reward in enumerate(rewards):
                 writer.writerow([i, reward])
+
+        print("Training completed.")
+        self.save_model('final_' + save_filename)
 
         # Save plot
         plt.plot(rewards)
@@ -218,6 +225,7 @@ class DQNAgent:
                     done = True
                     success_count += 1
                     print("SUCCESS!")
+                    break 
             
             print(f"Test Episode: {episode}, Total reward: {total_reward}")
         

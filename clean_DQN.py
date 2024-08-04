@@ -149,6 +149,9 @@ class DQNAgent:
                 total_reward += reward
                 step += 1
                 self.replay()
+                if step >= 500:
+                    print("SUCCESS!")
+                    break
 
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
@@ -164,7 +167,6 @@ class DQNAgent:
 
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-
         # Save rewards to CSV file
         rewards_filename = save_filename.replace('.pth', '_rewards.csv')
         with open(rewards_filename, 'w', newline='') as f:
@@ -172,6 +174,9 @@ class DQNAgent:
             writer.writerow(['Episode', 'Total Reward'])
             for i, reward in enumerate(rewards):
                 writer.writerow([i, reward])
+
+        print("Training completed.")
+        self.save_model('final_' + save_filename)
 
         # Save plot
         plt.plot(rewards)
@@ -185,13 +190,13 @@ class DQNAgent:
 
     def test(self, model_filename, episodes=10, disturbance_step=100, disturbance_magnitude=1.0):
         self.load_model(model_filename)
+        success_count = 0
+
         for episode in range(episodes):
             state, info = self.env.reset()
             total_reward = 0
             done = False
             step = 0
-            success_count = 0
-
             while not done:
                 if args.render:
                     self.env.render()
@@ -211,10 +216,13 @@ class DQNAgent:
                     done = True
                     success_count += 1
                     print("SUCCESS!")
+                    break
             
             print(f"Test Episode: {episode}, Total reward: {total_reward}")
+
         
-        print(f"Success rate:", success_count/episodes * 100, "%")
+        success_rate = success_count/episodes * 100
+        print(f"Success rate:", success_rate, "%")
 
 
     def save_model(self, filename):
@@ -260,7 +268,7 @@ if __name__ == "__main__":
         agent = DQNAgent(test_env, reward_fun=args.reward, gamma=args.gamma, epsilon=args.epsilon, epsilon_min=args.epsilon_min, epsilon_decay=args.epsilon_decay, lr=args.lr, batch_size=args.batch_size, memory_size=args.memory_size)
         if args.load:
             agent.load_model(args.load)
-        agent.test(model_filename=args.load, episodes=10)
+        agent.test(model_filename=args.load, episodes=100)
     else:
         train_env = create_env(noise_std=args.noise_std)
         agent = DQNAgent(train_env, reward_fun=args.reward, gamma=args.gamma, epsilon=args.epsilon, epsilon_min=args.epsilon_min, epsilon_decay=args.epsilon_decay, lr=args.lr, batch_size=args.batch_size, memory_size=args.memory_size)
@@ -270,5 +278,5 @@ if __name__ == "__main__":
 
         test_env = create_env(render_mode='human' if args.render else None, noise_std=args.test_noise)
         agent.env = test_env
-        agent.test(model_filename=save_filename, episodes=10)
+        agent.test(model_filename=save_filename, episodes=100)
         test_env.close()
