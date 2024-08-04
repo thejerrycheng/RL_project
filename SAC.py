@@ -80,13 +80,14 @@ class Critic(nn.Module):
         return x
 
 class SACAgent:
-    def __init__(self, env, gamma=0.99, tau=0.005, alpha=0.2, lr=0.0003, batch_size=64, memory_size=100000):
+    def __init__(self, env, gamma=0.99, tau=0.005, alpha=0.2, lr=0.0003, batch_size=64, memory_size=100000, episodes=10000):
         self.env = env
         self.gamma = gamma
         self.tau = tau
         self.alpha = alpha
         self.lr = lr
         self.batch_size = batch_size
+        self.episodes = episodes
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.actor = Actor(env.observation_space.shape[0], env.action_space.shape[0]).to(self.device)
@@ -124,14 +125,14 @@ class SACAgent:
         states, actions, rewards, next_states, dones = zip(*batch)
         return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(dones)
 
-    def train(self, episodes=1000, save_filename=None):
+    def train(self, save_filename=None):
         if save_filename is None:
             current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             save_filename = f'sac_{current_time}.pth'
 
         rewards = []
         best_total_reward = -float('inf')
-        for episode in range(episodes):
+        for episode in range(self.episodes):
             state, info = self.env.reset()
             episode_reward = 0
             done = False
@@ -146,19 +147,21 @@ class SACAgent:
                 if len(self.memory) > self.batch_size:
                     self.update()
 
+                if step >= 500:
+                    print("SUCCESS!")
+                    break
+
             rewards.append(episode_reward)
 
-            if episode_reward > best_total_reward:
+            if episode_reward >=  best_total_reward:
                 best_total_reward = episode_reward
                 self.save_model(save_filename)
                 print(f"New best total reward: {best_total_reward} - Model saved")
 
             if episode % 10 == 0:
-                print(f"Episode: {episode}, Reward: {episode_reward}, Steps: {step}")
+                print(f"Episode: {episode}, Reward: {episode_reward}, Steps: {step} -------------------------")
 
-            if step >= 500:
-                print("SUCCESS!")
-                break
+            
 
         # Save rewards to CSV file
         rewards_filename = save_filename.replace('.pth', '_rewards.csv')
@@ -242,6 +245,7 @@ class SACAgent:
             episode_reward = 0
             done = False
             step = 0
+            success_count = 0
             while not done:
                 if args.render:
                     self.env.render()
@@ -252,8 +256,11 @@ class SACAgent:
                 step += 1
                 if step >= 500:
                     print("SUCCESS!")
+                    success_count += 1
                     break
-            print(f"Test Episode: {episode}, Reward: {episode_reward}")
+
+            success_rate = success_count / episodes*100
+            print(f"Test Episode: {episode}, Reward: {episode_reward}, Success Rate: {success_rate}%")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SAC for CartPole with Sensor Noise')
@@ -267,7 +274,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for replay')
     parser.add_argument('--memory_size', type=int, default=100000, help='Replay memory size')
     parser.add_argument('--noise_std', type=float, default=0.1, help='Standard deviation of the noise')
-    parser.add_argument('--episodes', type=int, default=10000, help='Number of episodes for training')
+    parser.add_argument('--episodes', type=int, default=2000, help='Number of episodes for training')
     parser.add_argument('--test', action='store_true', help='Test the model')
     parser.add_argument('--render', action='store_true', help='Render the environment')
     args = parser.parse_args()
@@ -284,16 +291,16 @@ if __name__ == "__main__":
 
     if args.test:
         test_env = create_env(render_mode='human' if args.render else None, noise_std=args.noise_std)
-        agent = SACAgent(test_env, gamma=args.gamma, tau=args.tau, alpha=args.alpha, lr=args.lr, batch_size=args.batch_size, memory_size=args.memory_size)
+        agent = SACAgent(test_env, gamma=args.gamma, tau=args.tau, alpha=args.alpha, lr=args.lr, batch_size=args.batch_size, memory_size=args.memory_size, episodes=args.episodes)
         if args.load:
             agent.load_model(args.load)
         agent.test(model_filename=args.load, episodes=10)
     else:
         train_env = create_env(noise_std=args.noise_std)
-        agent = SACAgent(train_env, gamma=args.gamma, tau=args.tau, alpha=args.alpha, lr=args.lr, batch_size=args.batch_size, memory_size=args.memory_size)
+        agent = SACAgent(train_env, gamma=args.gamma, tau=args.tau, alpha=args.alpha, lr=args.lr, batch_size=args.batch_size, memory_size=args.memory_size, episodes=args.episodes)
         if args.load:
             agent.load_model(args.load)
-        agent.train(episodes=args.episodes, save_filename=save_filename)
+        agent.train(save_filename=save_filename)
 
         test_env = create_env(render_mode='human' if args.render else None, noise_std=args.noise_std)
         agent.env = test_env

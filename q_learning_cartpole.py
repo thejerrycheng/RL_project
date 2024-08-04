@@ -26,7 +26,7 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         return noisy_obs
 
 class QLearningAgent:
-    def __init__(self, env, bins=(15, 15, 15, 15), alpha=0.1, gamma=0.7, epsilon=0.7, epsilon_decay=0.999, epsilon_min=0.01, model_filename=None):
+    def __init__(self, env, bins=(15, 15, 15, 15), alpha=0.1, gamma=0.7, epsilon=0.99, epsilon_decay=0.9999, epsilon_min=0.01, model_filename=None):
         self.env = env
         self.bins = bins
         self.alpha = alpha
@@ -59,6 +59,8 @@ class QLearningAgent:
         if np.random.random() < self.epsilon:
             return self.env.action_space.sample()
         return np.argmax(self.q_table[state])
+    
+    
 
     def update_q_table(self, state, action, reward, next_state, done):
         best_next_action = np.argmax(self.q_table[next_state])
@@ -71,26 +73,32 @@ class QLearningAgent:
         rewards = []  # Initialize list to store rewards for each episode
 
         episode = 0
-        for epiosde in range(100000): #5,000,000
+        for episode in range(100000): #5,000,000
             current_state, info = self.env.reset()
             current_state = self.discretize(current_state)
             done = False
             total_reward = 0
+            step = 0
 
             while not done:
                 action = self.choose_action(current_state)
                 next_state, reward, done, _, _ = self.env.step(action)
                 # Additional rewards for specific conditions
-                cart_position, cart_velocity, pole_angle, pole_angular_velocity = next_state
-                if abs(cart_position) < 0.1:
-                    reward += 1  # Reward for being close to the middle
-                if abs(pole_angle) < np.radians(2):
-                    reward += 1  # Reward for being close to vertical
+                # cart_position, cart_velocity, pole_angle, pole_angular_velocity = next_state
+                # if abs(cart_position) < 0.1:
+                #     reward += 1  # Reward for being close to the middle
+                # if abs(pole_angle) < np.radians(2):
+                #     reward += 1  # Reward for being close to vertical
 
                 next_state = self.discretize(next_state)
                 self.update_q_table(current_state, action, reward, next_state, done)
                 current_state = next_state
                 total_reward += reward
+                step += 1
+
+                if step > 500:
+                    print("SUCCESS")
+                    break
 
             # self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
             rewards.append(total_reward)  # Store the total reward for this episode
@@ -101,9 +109,10 @@ class QLearningAgent:
                 print(f"Episode: {episode}, Best total reward: {best_total_reward} ") # Print the best total reward
 
             if episode % 100 == 0:
-                print(f"Episode: {episode}, Total reward: {total_reward}")
+                print(f"Episode: {episode}, Total reward: {total_reward}, Epsilon: {self.epsilon}, Steps: {step}")
 
-            episode += 1
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+            
 
         # Plot episode vs. rewards
         plt.plot(rewards)
@@ -120,6 +129,7 @@ class QLearningAgent:
             current_state = self.discretize(current_state)
             done = False
             total_reward = 0
+            step = 0
 
             while not done:
                 if episode % 20 == 0:
@@ -136,6 +146,11 @@ class QLearningAgent:
                 next_state = self.discretize(next_state)
                 current_state = next_state
                 total_reward += reward
+                step += 1
+
+                if step > 500:
+                    print("SUCCESS")
+                    break
 
             total_rewards.append(total_reward)
             print(f"Test Episode: {episode}, Total reward: {total_reward}")

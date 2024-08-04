@@ -160,7 +160,7 @@ class DQNAgent:
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
 
-            if total_reward > best_total_reward:
+            if total_reward >= best_total_reward:
                 best_total_reward = total_reward
                 self.save_model(save_filename)
                 print(f"New best total reward: {best_total_reward} - Model saved")
