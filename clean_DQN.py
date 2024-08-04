@@ -203,6 +203,9 @@ class DQNAgent:
 
     def test(self, model_filename, episodes=10, disturbance_step=100, disturbance_magnitude=1.0):
         self.load_model(model_filename)
+        rewards = []
+        successes = 0
+
         for episode in range(episodes):
             state, info = self.env.reset()
             total_reward = 0
@@ -230,9 +233,21 @@ class DQNAgent:
                 step += 1
                 if step >= 500:
                     done = True
+                    successes += 1
                     print("SUCCESS!")
-            
-            print(f"Test Episode: {episode}, Total reward: {total_reward}") 
+
+            rewards.append(total_reward)
+            print(f"Test Episode: {episode}, Total reward: {total_reward}")
+
+        success_rate = (successes / episodes) * 100
+        print(f"Success rate: {success_rate}%")
+
+        plt.plot(range(episodes), rewards)
+        plt.xlabel('Episodes')
+        plt.ylabel('Total Reward')
+        plt.title('Reward vs Episodes')
+        plt.show()
+
 
     def save_model(self, filename):
         torch.save(self.model.state_dict(), filename)
