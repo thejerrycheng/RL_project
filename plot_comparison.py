@@ -8,12 +8,12 @@ def plot_average_reward_over_episodes(file_paths):
     
     for file_path in file_paths:
         data = pd.read_csv(file_path)
-        data['Average Reward'] = data['Total Reward'].rolling(window=100).mean()
+        data['Average Reward'] = data['Total Reward'].rolling(window=250).mean()
         plt.plot(data['Episode'], data['Average Reward'], label=file_path)
     
     plt.xlabel('Episode')
     plt.ylabel('Average Reward')
-    plt.title('Average Reward over 100 Episodes')
+    plt.title('Average Reward over 250 Episodes')
     plt.legend()
     plt.grid(True)
     plt.show()
