@@ -5,6 +5,7 @@ import pickle
 import matplotlib.pyplot as plt
 import argparse
 import datetime
+import csv
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
@@ -98,7 +99,6 @@ class QLearningAgent:
                     print("SUCCESS")
                     break
 
-            # self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
             rewards.append(total_reward)  # Store the total reward for this episode
 
             if total_reward > best_total_reward:
@@ -111,6 +111,13 @@ class QLearningAgent:
 
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
             
+        # Save rewards to a CSV file with the name based on save_filename
+        csv_filename = save_filename.replace('.pkl', '_rewards.csv')
+        with open(csv_filename, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['Episode', 'Total Reward'])
+            for ep, reward in enumerate(rewards):
+                writer.writerow([ep, reward])
 
         # Plot episode vs. rewards
         plt.plot(rewards)
