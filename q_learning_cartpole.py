@@ -59,10 +59,8 @@ class QLearningAgent:
         if np.random.random() < self.epsilon:
             return self.env.action_space.sample()
         return np.argmax(self.q_table[state])
-    
-    
 
-    def update_q_table(self, state, action, reward, next_state, done):
+    def update_q_table(self, state, action, reward, next_state, done): 
         best_next_action = np.argmax(self.q_table[next_state])
         td_target = reward + self.gamma * self.q_table[next_state][best_next_action] * (not done)
         td_delta = td_target - self.q_table[state][action]

@@ -219,7 +219,7 @@ class ModelBasedAgent:
                 next_state, reward, done, _, _ = self.env.step(action)
 
                 # Custom reward function - reward reshaping 
-                reward = self.reward_function(next_state)
+                # reward = self.reward_function(next_state)
 
                 states.append(state)
                 actions.append(action)
@@ -356,7 +356,7 @@ class ModelBasedAgent:
                 action = self.select_action(state)
                 state, reward, done, _, _ = env.step(action)
 
-                reward = self.reward_function(state)
+                # reward = self.reward_function(state)
 
                 total_reward += reward
                 step += 1

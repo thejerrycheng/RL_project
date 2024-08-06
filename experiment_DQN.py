@@ -52,7 +52,7 @@ class DQN(nn.Module):
 def reward_fun1(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
     reward = 1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
     if done and total_reward < 500:
-        reward = -1.0 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
+        reward = -0.1 - (abs(cart_position) / 2.4) - (abs(pole_angle) / 0.209) - (abs(cart_velocity) / 1.0) - (abs(pole_velocity) / 1.0)
     return reward
 
 def reward_fun2(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done):
@@ -141,15 +141,14 @@ class DQNAgent:
                 next_state, reward, done, _, _ = self.env.step(action)
                 
                 # Custom reward function
-                # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                # reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
+                cart_position, cart_velocity, pole_angle, pole_velocity = next_state
+                reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
 
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
                 total_reward += reward
                 step += 1
                 self.replay()
-
                 if step >= 500:
                     print("SUCCESS!")
                     break
@@ -157,7 +156,7 @@ class DQNAgent:
             rewards.append(total_reward)
             recent_rewards.append(total_reward)
 
-            if total_reward > best_total_reward:
+            if total_reward >= best_total_reward:
                 best_total_reward = total_reward
                 self.save_model(save_filename)
                 print(f"New best total reward: {best_total_reward} - Model saved")
@@ -166,9 +165,7 @@ class DQNAgent:
                 self.update_target_model()
                 print(f"Episode: {episode}, Average reward: {np.mean(rewards[-10:])}, Epsilon: {self.epsilon}, Step: {step}")
 
-            
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-
 
         # Save rewards to CSV file
         rewards_filename = save_filename.replace('.pth', '_rewards.csv')
@@ -209,8 +206,8 @@ class DQNAgent:
                 next_state, reward, done, _, _ = self.env.step(action)
             
                 # Custom reward function
-                # cart_position, cart_velocity, pole_angle, pole_velocity = next_state
-                # reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
+                cart_position, cart_velocity, pole_angle, pole_velocity = next_state
+                reward = self.reward_fun(cart_position, cart_velocity, pole_angle, pole_velocity, total_reward, done)
 
                 state = next_state
                 total_reward += reward
@@ -246,12 +243,12 @@ if __name__ == "__main__":
     parser.add_argument('--gamma', type=float, default=0.9, help='Discount factor')
     parser.add_argument('--epsilon', type=float, default=0.99, help='Initial epsilon')
     parser.add_argument('--epsilon_min', type=float, default=0.01, help='Minimum epsilon')
-    parser.add_argument('--epsilon_decay', type=float, default=0.9995, help='Epsilon decay factor')
+    parser.add_argument('--epsilon_decay', type=float, default=0.999, help='Epsilon decay factor')
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for replay')
     parser.add_argument('--memory_size', type=int, default=10000, help='Replay memory size')
     parser.add_argument('--noise_std', type=float, default=0.1, help='Standard deviation of the noise')
-    parser.add_argument('--episodes', type=int, default=10000, help='Number of episodes for training')
+    parser.add_argument('--episodes', type=int, default=5000, help='Number of episodes for training')
     parser.add_argument('--test', action='store_true', help='Test the model')
     parser.add_argument('--render', action='store_true', help='Render the environment')
     parser.add_argument('--test_noise', type=float, default=0.1, help='Noise level for testing')

@@ -274,7 +274,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for replay')
     parser.add_argument('--memory_size', type=int, default=100000, help='Replay memory size')
     parser.add_argument('--noise_std', type=float, default=0.1, help='Standard deviation of the noise')
-    parser.add_argument('--episodes', type=int, default=2000, help='Number of episodes for training')
+    parser.add_argument('--episodes', type=int, default=5000, help='Number of episodes for training')
     parser.add_argument('--test', action='store_true', help='Test the model')
     parser.add_argument('--render', action='store_true', help='Render the environment')
     args = parser.parse_args()
