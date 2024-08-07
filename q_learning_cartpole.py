@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import argparse
 import datetime
 import csv
+import time
 
 class NoisyObservationWrapper(gym.ObservationWrapper):
     def __init__(self, env, noise_std=0.1):
@@ -27,7 +28,7 @@ class NoisyObservationWrapper(gym.ObservationWrapper):
         return noisy_obs
 
 class QLearningAgent:
-    def __init__(self, env, bins=(15, 15, 15, 15), alpha=0.1, gamma=0.7, epsilon=0.99, epsilon_decay=0.9999, epsilon_min=0.01, model_filename=None):
+    def __init__(self, env, bins=(8, 12, 8, 12), alpha=0.1, gamma=0.7, epsilon=0.99, epsilon_decay=0.9999, epsilon_min=0.01, model_filename=None):
         self.env = env
         self.bins = bins
         self.alpha = alpha
@@ -71,6 +72,8 @@ class QLearningAgent:
         best_total_reward = -float('inf')  # Initialize the best total reward
         rewards = []  # Initialize list to store rewards for each episode
 
+        start_time = time.time()  # Start time for training
+
         episode = 0
         for episode in range(100000): #5,000,000
             current_state, info = self.env.reset()
@@ -101,7 +104,7 @@ class QLearningAgent:
 
             rewards.append(total_reward)  # Store the total reward for this episode
 
-            if total_reward > best_total_reward:
+            if total_reward >= best_total_reward:
                 best_total_reward = total_reward
                 self.save_model(filename=save_filename)  # Save the model if the current total reward is higher than the best total reward
                 print(f"Episode: {episode}, Best total reward: {best_total_reward} ") # Print the best total reward
@@ -110,7 +113,8 @@ class QLearningAgent:
                 print(f"Episode: {episode}, Total reward: {total_reward}, Epsilon: {self.epsilon}, Steps: {step}")
 
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-            
+
+    
         # Save rewards to a CSV file with the name based on save_filename
         csv_filename = save_filename.replace('.pkl', '_rewards.csv')
         with open(csv_filename, 'w', newline='') as csvfile:
@@ -119,6 +123,12 @@ class QLearningAgent:
             for ep, reward in enumerate(rewards):
                 writer.writerow([ep, reward])
 
+        self.save_model(filename='final_' + save_filename)  # Save the final model
+
+        end_time = time.time()  # End time for training
+        training_time = end_time - start_time  # Calculate total training time
+        print(f"Total training time: {training_time:.2f} seconds")  # Output total training time
+
         # Plot episode vs. rewards
         plt.plot(rewards)
         plt.xlabel('Episode')
@@ -126,8 +136,12 @@ class QLearningAgent:
         plt.title('Episode vs. Total Reward')
         plt.show()
 
-    def test(self, episodes=20):
+    def test(self, episodes=100, best_model_filename=None):
+        if best_model_filename:
+            self.load_model(best_model_filename)
+
         total_rewards = []
+        success_count = 0
 
         for episode in range(episodes):
             current_state, info = self.env.reset()
@@ -155,6 +169,7 @@ class QLearningAgent:
 
                 if step > 500:
                     print("SUCCESS")
+                    success_count += 1
                     break
 
             total_rewards.append(total_reward)
@@ -163,10 +178,12 @@ class QLearningAgent:
         average_reward = np.mean(total_rewards)
         highest_reward = np.max(total_rewards)
         lowest_reward = np.min(total_rewards)
+        success_rate = success_count / episodes * 100
 
         print(f"Average Reward: {average_reward}")
         print(f"Highest Reward: {highest_reward}")
         print(f"Lowest Reward: {lowest_reward}")
+        print(f"Success Rate: {success_rate}%")
 
         self.env.close()
 
@@ -185,6 +202,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Q-Learning for CartPole with Sensor Noise')
     parser.add_argument('--load', type=str, help='Model filename to load', default=None)
     parser.add_argument('--save', type=str, help='Model filename to save', default=None)
+    parser.add_argument('--bins', type=str, help='Comma-separated list of bin sizes, e.g., 8,12,8,12', default='8,12,8,12')
     args = parser.parse_args()
 
     save_filename = args.save
@@ -192,13 +210,16 @@ if __name__ == "__main__":
         current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         save_filename = f'q_learning_{current_time}.pkl'
 
+    # Parse the bins argument into a tuple of integers
+    bins = tuple(map(int, args.bins.split(',')))
+
     train_env = gym.make('CartPole-v1')
     noisy_train_env = NoisyObservationWrapper(train_env, noise_std=0.1)
-    agent = QLearningAgent(noisy_train_env, model_filename=args.load)
+    agent = QLearningAgent(noisy_train_env, bins=bins, model_filename=args.load)
     agent.train(save_filename)
     
     test_env = gym.make('CartPole-v1', render_mode='human')
     noisy_test_env = NoisyObservationWrapper(test_env, noise_std=0.1)
     agent.env = noisy_test_env
-    agent.test()
+    agent.test(best_model_filename=save_filename)
     test_env.close()
